@@ -131,7 +131,7 @@ func (t *Thing) Connect(servers ...string) error {
 		return connectToken.Error()
 	}
 
-	t.client.Subscribe(t.configTopic(), 0, t.configHandler)
+	t.client.Subscribe(t.configTopic(), 1, t.configHandler)
 
 	return nil
 }
@@ -198,7 +198,7 @@ func (t *Thing) publish(topic string, message []byte) error {
 	if t.client == nil || !t.client.IsConnected() {
 		return ErrNotConnected
 	}
-	token := t.client.Publish(topic, 0, true, message)
+	token := t.client.Publish(topic, 1, true, message)
 	token.Wait()
 	if token.Error() != nil {
 		return token.Error()
