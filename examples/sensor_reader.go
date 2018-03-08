@@ -19,6 +19,7 @@ type SensorReader struct {
 	stopped chan error
 	logger  iot.Logger
 	wg      sync.WaitGroup
+	cfg     string
 }
 
 func (sr *SensorReader) getTelemetry() []byte {
@@ -31,11 +32,11 @@ func (sr *SensorReader) getTelemetry() []byte {
 }
 
 func (sr *SensorReader) updateConfig(config []byte) {
-
+	sr.cfg = string(config)
 }
 
 func (sr *SensorReader) getState() []byte {
-	return []byte("Config received")
+	return []byte("Config: " + sr.cfg)
 }
 
 func (sr *SensorReader) log(msg string) {
