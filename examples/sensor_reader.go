@@ -64,6 +64,9 @@ func NewSensorReader(id iot.ID, credentials *iot.Credentials, queueDirectory str
 			thing.PublishState(sr.getState())
 		},
 		QueueDirectory: queueDirectory,
+		ConfigQOS:      1,
+		StateQOS:       1,
+		EventQOS:       1,
 	}
 
 	err := thing.Connect(servers...)

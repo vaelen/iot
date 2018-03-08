@@ -69,17 +69,20 @@ type Thing struct {
 	LogLevel       LogLevel
 	QueueDirectory string
 	ConfigHandler  ConfigHandler
+	ConfigQOS      uint8
+	StateQOS       uint8
+	EventQOS       uint8
 	client         mqtt.Client
 }
 
 // PublishState publishes the current device state
 func (t *Thing) PublishState(message []byte) error {
-	return t.publish(t.stateTopic(), message)
+	return t.publish(t.stateTopic(), message, t.StateQOS)
 }
 
 // PublishEvent publishes an event. An optional hierarchy of event names can be provided.
 func (t *Thing) PublishEvent(message []byte, event ...string) error {
-	return t.publish(t.eventsTopic(event...), message)
+	return t.publish(t.eventsTopic(event...), message, t.EventQOS)
 }
 
 // Connect to the given MQTT server(s)
@@ -131,7 +134,7 @@ func (t *Thing) Connect(servers ...string) error {
 		return connectToken.Error()
 	}
 
-	t.client.Subscribe(t.configTopic(), 1, t.configHandler)
+	t.client.Subscribe(t.configTopic(), t.ConfigQOS, t.configHandler)
 
 	return nil
 }
@@ -194,11 +197,11 @@ func (t *Thing) configHandler(i mqtt.Client, message mqtt.Message) {
 	}
 }
 
-func (t *Thing) publish(topic string, message []byte) error {
+func (t *Thing) publish(topic string, message []byte, qos uint8) error {
 	if t.client == nil || !t.client.IsConnected() {
 		return ErrNotConnected
 	}
-	token := t.client.Publish(topic, 1, true, message)
+	token := t.client.Publish(topic, qos, true, message)
 	token.Wait()
 	if token.Error() != nil {
 		return token.Error()
