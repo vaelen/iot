@@ -116,6 +116,11 @@ func (t *Thing) Connect(servers ...string) error {
 	})
 	options.SetConnectionLostHandler(func(i mqtt.Client, e error) {
 		t.errorf("Connection Lost. Error: %v", e)
+		authToken, _ := t.authToken()
+		if !t.client.IsConnected() {
+			options.SetPassword(authToken)
+			t.client.Connect()
+		}
 	})
 
 	for _, server := range servers {
@@ -148,7 +153,9 @@ func (t *Thing) IsConnected() bool {
 func (t *Thing) Disconnect() {
 	if t.client != nil {
 		t.client.Unsubscribe(t.configTopic())
-		t.client.Disconnect(250)
+		if t.client.IsConnected() {
+			t.client.Disconnect(250)
+		}
 	}
 }
 
@@ -163,9 +170,11 @@ func (t *Thing) authToken() (string, error) {
 
 	wt.Claims = &jwt.StandardClaims{
 		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(time.Hour * 1).Unix(),
+		ExpiresAt: time.Now().Add(time.Minute).Unix(),
 		Audience:  t.ID.ProjectID,
 	}
+
+	t.debugf("Auth Token: %+v", wt.Claims)
 
 	token, err := wt.SignedString(t.Credentials.PrivateKey)
 	if err != nil {
@@ -219,7 +228,7 @@ func (t *Thing) log(level string, msg string) {
 func (t *Thing) debugf(format string, v ...interface{}) {
 	if t.Logger != nil && t.LogLevel >= LogLevelDebug {
 		msg := fmt.Sprintf(format, v...)
-		t.log("INFO", msg)
+		t.log("DEBUG", msg)
 	}
 }
 
