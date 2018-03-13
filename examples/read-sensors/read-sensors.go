@@ -24,10 +24,10 @@ func handleError(description string, err error) {
 }
 
 type Config struct {
-	ID iot.ID
+	ID          iot.ID
 	Certificate string
-	PrivateKey string
-	Server string
+	PrivateKey  string
+	Server      string
 }
 
 func main() {
@@ -56,4 +56,5 @@ func main() {
 	handleError("Couldn't start sensor reader", err)
 
 	sr.Wait()
+
 }
