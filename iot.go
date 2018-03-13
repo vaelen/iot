@@ -8,13 +8,14 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/eclipse/paho.mqtt.golang"
+	"github.com/vaelen/paho.mqtt.golang"
 	"io/ioutil"
 	"strings"
 	"time"
 )
 
 var ErrNotConnected = fmt.Errorf("not connected")
+var ErrPublishFailed = fmt.Errorf("could not publish message")
 
 type ConfigHandler func(thing *Thing, config []byte)
 type Logger func(msg string)
@@ -63,16 +64,18 @@ func LoadCredentials(certificatePath string, privateKeyPath string) (*Credential
 }
 
 type Thing struct {
-	ID             ID
-	Credentials    *Credentials
-	Logger         Logger
-	LogLevel       LogLevel
-	QueueDirectory string
-	ConfigHandler  ConfigHandler
-	ConfigQOS      uint8
-	StateQOS       uint8
-	EventQOS       uint8
-	client         mqtt.Client
+	ID                  ID
+	Credentials         *Credentials
+	Logger              Logger
+	LogLevel            LogLevel
+	QueueDirectory      string
+	ConfigHandler       ConfigHandler
+	ConfigQOS           uint8
+	StateQOS            uint8
+	EventQOS            uint8
+	AuthTokenExpiration time.Duration
+	client              mqtt.Client
+	publishTicker       *time.Ticker
 }
 
 // PublishState publishes the current device state
@@ -87,9 +90,8 @@ func (t *Thing) PublishEvent(message []byte, event ...string) error {
 
 // Connect to the given MQTT server(s)
 func (t *Thing) Connect(servers ...string) error {
-	authToken, err := t.authToken()
-	if err != nil {
-		return err
+	if t.IsConnected() {
+		return nil
 	}
 
 	var store mqtt.Store
@@ -106,35 +108,40 @@ func (t *Thing) Connect(servers ...string) error {
 		InsecureSkipVerify: true,
 	})
 
+	options.SetCleanSession(false)
+	options.SetAutoReconnect(true)
 	options.SetProtocolVersion(4)
 	options.SetClientID(t.clientID())
 	options.SetUsername("unused")
-	options.SetPassword(authToken)
 	options.SetStore(store)
 	options.SetOnConnectHandler(func(i mqtt.Client) {
 		t.infof("Connected")
 	})
-	options.SetConnectionLostHandler(func(i mqtt.Client, e error) {
+	options.SetConnectionLostHandler(func(client mqtt.Client, e error) {
 		t.errorf("Connection Lost. Error: %v", e)
-		authToken, _ := t.authToken()
-		if !t.client.IsConnected() {
-			options.SetPassword(authToken)
-			t.client.Connect()
-		}
 	})
+
+	t.publishTicker = time.NewTicker(time.Second * 2)
 
 	for _, server := range servers {
 		options.AddBroker(server)
 	}
 
-	if t.client != nil {
-		t.Disconnect()
-	}
+	options.SetPasswordProvider(func() string {
+		authToken, err := t.authToken()
+		if err != nil {
+			t.errorf("Error generating auth token: %v", err)
+			return ""
+		}
+		return authToken
+	})
 
 	t.client = mqtt.NewClient(options)
 
 	connectToken := t.client.Connect()
-	connectToken.Wait()
+	for !connectToken.WaitTimeout(time.Second) {
+		t.debugf("PENDING CONNECT")
+	}
 	if connectToken.Error() != nil {
 		return connectToken.Error()
 	}
@@ -154,7 +161,8 @@ func (t *Thing) Disconnect() {
 	if t.client != nil {
 		t.client.Unsubscribe(t.configTopic())
 		if t.client.IsConnected() {
-			t.client.Disconnect(250)
+			t.infof("Disconnecting")
+			t.client.Disconnect(1000)
 		}
 	}
 }
@@ -168,9 +176,14 @@ func (t *Thing) clientID() string {
 func (t *Thing) authToken() (string, error) {
 	wt := jwt.New(jwt.GetSigningMethod("RS256"))
 
+	expirationInterval := t.AuthTokenExpiration
+	if expirationInterval == 0 {
+		expirationInterval = time.Hour
+	}
+
 	wt.Claims = &jwt.StandardClaims{
 		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(time.Minute).Unix(),
+		ExpiresAt: time.Now().Add(expirationInterval).Unix(),
 		Audience:  t.ID.ProjectID,
 	}
 
@@ -207,16 +220,18 @@ func (t *Thing) configHandler(i mqtt.Client, message mqtt.Message) {
 }
 
 func (t *Thing) publish(topic string, message []byte, qos uint8) error {
-	if t.client == nil || !t.client.IsConnected() {
-		return ErrNotConnected
-	}
+	<-t.publishTicker.C // Don't publish more than once per second
 	token := t.client.Publish(topic, qos, true, message)
-	token.Wait()
-	if token.Error() != nil {
+	if !token.WaitTimeout(time.Second) {
+		t.debugf("SEND TIMEOUT - Topic: %s, Message Length: %d bytes", topic, len(message))
+		return ErrPublishFailed
+	} else if token.Error() != nil {
+		t.debugf("SEND FAILED - Topic: %s, Message Length: %d bytes, Error: %v", topic, len(message), token.Error())
 		return token.Error()
+	} else {
+		t.debugf("SENT - Topic: %s, Message Length: %d bytes", topic, len(message))
+		return nil
 	}
-	t.debugf("SENT - Topic: %s, Message Length: %d bytes", topic, len(message))
-	return nil
 }
 
 func (t *Thing) log(level string, msg string) {
