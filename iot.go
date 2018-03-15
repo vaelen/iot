@@ -127,13 +127,13 @@ func (t *Thing) Connect(servers ...string) error {
 		options.AddBroker(server)
 	}
 
-	options.SetPasswordProvider(func() string {
+	options.SetCredentialsProvider(func() (username string, password string) {
 		authToken, err := t.authToken()
 		if err != nil {
 			t.errorf("Error generating auth token: %v", err)
-			return ""
+			return "", ""
 		}
-		return authToken
+		return "unused", authToken
 	})
 
 	t.client = mqtt.NewClient(options)
