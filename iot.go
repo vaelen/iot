@@ -1,6 +1,7 @@
 // Copyright 2018, Andrew C. Young
 // License: MIT
 
+// This package provides a simple implementation of a Google IoT Core device.
 package iot
 
 import (
@@ -8,26 +9,41 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/vaelen/paho.mqtt.golang"
+	"github.com/eclipse/paho.mqtt.golang"
 	"io/ioutil"
 	"strings"
 	"time"
 )
 
+// DefaultAuthTokenExpiration is the default value for Thing.AuthTokenExpiration
+const DefaultAuthTokenExpiration = time.Hour
+
+// ErrNoConnected is returned if a message is published but the client is not connected
 var ErrNotConnected = fmt.Errorf("not connected")
+
+// ErrPublishFailed is returned if the client was unable to send the message
 var ErrPublishFailed = fmt.Errorf("could not publish message")
 
+// ErrConfigurationError is returned from Connect() if either the ID or Credentials have not been set.
+var ErrConfigurationError = fmt.Errorf("required configuration values are mising")
+
+// ConfigHandler handles configuration updates received from the server.
 type ConfigHandler func(thing *Thing, config []byte)
+
+// Logger is used to write log output.  If no Logger is provided, no logging will be performed.
 type Logger func(msg string)
 
+// LogLevel determines how verbose the logging is
 type LogLevel uint8
 
 const (
-	LogLevelError LogLevel = 0
-	LogLevelInfo  LogLevel = 1
-	LogLevelDebug LogLevel = 2
+	LogLevelOff   LogLevel = 0
+	LogLevelError LogLevel = 1
+	LogLevelInfo  LogLevel = 2
+	LogLevelDebug LogLevel = 3
 )
 
+// ID represents the various components that uniquely identify this device
 type ID struct {
 	ProjectID string
 	Location  string
@@ -35,12 +51,13 @@ type ID struct {
 	DeviceID  string
 }
 
+// Credentials wraps the public and private key for a device
 type Credentials struct {
 	Certificate tls.Certificate
 	PrivateKey  *rsa.PrivateKey
 }
 
-// LoadCredentials creates a Credentials from the given private key and certificate
+// LoadCredentials creates a Credentials struct from the given private key and certificate
 func LoadCredentials(certificatePath string, privateKeyPath string) (*Credentials, error) {
 	signBytes, err := ioutil.ReadFile(privateKeyPath)
 	if err != nil {
@@ -64,15 +81,39 @@ func LoadCredentials(certificatePath string, privateKeyPath string) (*Credential
 }
 
 type Thing struct {
-	ID                  ID
-	Credentials         *Credentials
-	Logger              Logger
-	LogLevel            LogLevel
-	QueueDirectory      string
-	ConfigHandler       ConfigHandler
-	ConfigQOS           uint8
-	StateQOS            uint8
-	EventQOS            uint8
+	// ID identifies this device.
+	// This value is required.
+	ID *ID
+	// Credentials are used to authenticate with the server.
+	// This value is required.
+	Credentials *Credentials
+	// Logger is used to print log output.
+	// If no Logger is provided, no logging will occur.
+	Logger Logger
+	// LogLevel determines the verbosity of the log output.
+	// The default value will produce no logging.
+	LogLevel LogLevel
+	// QueueDirectory should be a directory writable by the process.
+	// If not provided, message queues will not be persisted between restarts.
+	QueueDirectory string
+	// ConfigHandler will be called when a new configuration document is received from the server.
+	ConfigHandler ConfigHandler
+	// ConfigQOS sets the QoS level for receiving config updates.
+	// The default value will only perform best effort delivery.
+	// The suggested value is 2.
+	ConfigQOS uint8
+	// StateQOS sets the QoS level for sending state updates.
+	// The default value will only perform best effort delivery.
+	// The suggested value is 1.
+	StateQOS uint8
+	// EventQOS sets the QoS level for sending event updates.
+	// The default value will only perform best effort delivery.
+	// The suggested value is 1.
+	// Google does not allow a value of 2 here.
+	EventQOS uint8
+	// AuthTokenExpiration determines how often a new auth token must be generated.
+	// The minimum value is 10 minutes and the maximum value is 24 hours.
+	// The default value is 1 hour.
 	AuthTokenExpiration time.Duration
 	client              mqtt.Client
 	publishTicker       *time.Ticker
@@ -92,6 +133,12 @@ func (t *Thing) PublishEvent(message []byte, event ...string) error {
 func (t *Thing) Connect(servers ...string) error {
 	if t.IsConnected() {
 		return nil
+	}
+	if t.ID == nil || t.Credentials == nil {
+		return ErrConfigurationError
+	}
+	if t.AuthTokenExpiration == 0 {
+		t.AuthTokenExpiration = DefaultAuthTokenExpiration
 	}
 
 	var store mqtt.Store

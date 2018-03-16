@@ -54,7 +54,7 @@ func NewSensorReader(id iot.ID, credentials *iot.Credentials, queueDirectory str
 	}
 
 	thing := iot.Thing{
-		ID:          id,
+		ID:          &id,
 		Credentials: credentials,
 		Logger:      logger,
 		LogLevel:    logLevel,
