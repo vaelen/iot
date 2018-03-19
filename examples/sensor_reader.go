@@ -14,7 +14,7 @@ import (
 )
 
 type SensorReader struct {
-	thing   iot.Thing
+	thing   *iot.Thing
 	stop    chan bool
 	stopped chan error
 	logger  iot.Logger
@@ -45,7 +45,7 @@ func (sr *SensorReader) log(msg string) {
 	}
 }
 
-func NewSensorReader(id iot.ID, credentials *iot.Credentials, queueDirectory string, logger iot.Logger, logLevel iot.LogLevel, servers ...string) (*SensorReader, error) {
+func NewSensorReader(id *iot.ID, credentials *iot.Credentials, queueDirectory string, logger iot.Logger, logLevel iot.LogLevel, servers ...string) (*SensorReader, error) {
 
 	sr := &SensorReader{
 		stop:    make(chan bool),
@@ -53,20 +53,14 @@ func NewSensorReader(id iot.ID, credentials *iot.Credentials, queueDirectory str
 		logger:  logger,
 	}
 
-	thing := iot.Thing{
-		ID:          &id,
-		Credentials: credentials,
-		Logger:      logger,
-		LogLevel:    logLevel,
-		ConfigHandler: func(thing *iot.Thing, config []byte) {
-			sr.log("Config Received, Sending State")
-			sr.updateConfig(config)
-			thing.PublishState(sr.getState())
-		},
-		QueueDirectory: queueDirectory,
-		ConfigQOS:      1,
-		StateQOS:       1,
-		EventQOS:       1,
+	thing := iot.New(id, credentials)
+	thing.Logger = logger
+	thing.LogLevel = logLevel
+	thing.QueueDirectory = queueDirectory
+	thing.ConfigHandler = func(thing *iot.Thing, config []byte) {
+		sr.log("Config Received, Sending State")
+		sr.updateConfig(config)
+		thing.PublishState(sr.getState())
 	}
 
 	err := thing.Connect(servers...)

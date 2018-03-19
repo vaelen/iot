@@ -52,7 +52,7 @@ func main() {
 	queueDirectory, err := ioutil.TempDir("", "iot-queue-")
 	handleError("Couldn't create queue directory", err)
 
-	sr, err := examples.NewSensorReader(config.ID, credentials, queueDirectory, logMessage, iot.LogLevelDebug, config.Server)
+	sr, err := examples.NewSensorReader(&config.ID, credentials, queueDirectory, logMessage, iot.LogLevelDebug, config.Server)
 	handleError("Couldn't start sensor reader", err)
 
 	sr.Wait()
