@@ -14,7 +14,7 @@ import (
 )
 
 type SensorReader struct {
-	thing   *iot.Thing
+	thing   iot.Thing
 	stop    chan bool
 	stopped chan error
 	logger  iot.Logger
@@ -53,15 +53,17 @@ func NewSensorReader(id *iot.ID, credentials *iot.Credentials, queueDirectory st
 		logger:  logger,
 	}
 
-	thing := iot.New(id, credentials)
-	thing.Logger = logger
-	thing.LogLevel = logLevel
-	thing.QueueDirectory = queueDirectory
-	thing.ConfigHandler = func(thing *iot.Thing, config []byte) {
+	options := iot.DefaultOptions(id, credentials)
+	options.Logger = logger
+	options.LogLevel = logLevel
+	options.QueueDirectory = queueDirectory
+	options.ConfigHandler = func(thing iot.Thing, config []byte) {
 		sr.log("Config Received, Sending State")
 		sr.updateConfig(config)
 		thing.PublishState(sr.getState())
 	}
+
+	thing := iot.New(options)
 
 	err := thing.Connect(servers...)
 	if err != nil {

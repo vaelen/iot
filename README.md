@@ -6,9 +6,9 @@ A simple framework for implementing a Google IoT device.
 Here is an example showing how to use this library:
 ```go
 id := &iot.ID{
-	DeviceID: "deviceName",
-	Registry: "my-registry",
-	Location: "asia-east1",
+	DeviceID:  "deviceName",
+	Registry:  "my-registry",
+	Location:  "asia-east1",
 	ProjectID: "my-project",
 }
 
@@ -22,15 +22,17 @@ if err != nil {
 	panic("Couldn't create temp directory")
 }
 
-thing := iot.New(id, credentials)
-thing.Logger = func(msg string) { fmt.Println(msg) }
-thing.LogLevel = iot.LogLevelDebug
-thing.QueueDirectory = tmpDir
-thing.ConfigHandler = func(thing *iot.Thing, config []byte) {
+options := iot.DefaultOptions(id, credentials)
+options.Logger = func(msg string) { fmt.Println(msg) }
+options.LogLevel = iot.LogLevelDebug
+options.QueueDirectory = tmpDir
+options.ConfigHandler = func(thing iot.Thing, config []byte) {
 	// Do something here to process the updated config and create an updated state string
 	state := []byte("ok")
 	thing.PublishState(state)
 }
+
+thing := iot.New(options)
 
 err = thing.Connect("ssl://mqtt.googleapis.com:443")
 if err != nil {

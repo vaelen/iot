@@ -9,9 +9,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/eclipse/paho.mqtt.golang"
 	"io/ioutil"
-	"strings"
 	"time"
 )
 
@@ -28,7 +26,7 @@ var ErrPublishFailed = fmt.Errorf("could not publish message")
 var ErrConfigurationError = fmt.Errorf("required configuration values are mising")
 
 // ConfigHandler handles configuration updates received from the server.
-type ConfigHandler func(thing *Thing, config []byte)
+type ConfigHandler func(thing Thing, config []byte)
 
 // Logger is used to write log output.  If no Logger is provided, no logging will be performed.
 type Logger func(msg string)
@@ -39,8 +37,9 @@ type LogLevel uint8
 const (
 	LogLevelOff   LogLevel = 0
 	LogLevelError LogLevel = 1
-	LogLevelInfo  LogLevel = 2
-	LogLevelDebug LogLevel = 3
+	LogLevelWarn  LogLevel = 2
+	LogLevelInfo  LogLevel = 3
+	LogLevelDebug LogLevel = 4
 )
 
 // ID represents the various components that uniquely identify this device
@@ -80,7 +79,7 @@ func LoadCredentials(certificatePath string, privateKeyPath string) (*Credential
 	}, nil
 }
 
-type Thing struct {
+type ThingOptions struct {
 	// ID identifies this device.
 	// This value is required.
 	ID *ID
@@ -93,6 +92,9 @@ type Thing struct {
 	// LogLevel determines the verbosity of the log output.
 	// The default value will produce no logging.
 	LogLevel LogLevel
+	// LogMQTT enables logging of the underlying MQTT client.
+	// If enabled, the underlying MQTT client will log at the same level as the Thing itself (WARN, DEBUG, etc).
+	LogMQTT bool
 	// QueueDirectory should be a directory writable by the process.
 	// If not provided, message queues will not be persisted between restarts.
 	QueueDirectory string
@@ -116,14 +118,27 @@ type Thing struct {
 	// The minimum value is 10 minutes and the maximum value is 24 hours.
 	// The default value is 1 hour.
 	AuthTokenExpiration time.Duration
-	client              mqtt.Client
-	publishTicker       *time.Ticker
 }
 
-// New returns a new Thing struct with default values set.
-// You can also create a Thing struct directly if you would rather do so.
-func New(id *ID, credentials *Credentials) *Thing {
-	return &Thing{
+type Thing interface {
+	// PublishState publishes the current device state
+	PublishState(message []byte) error
+
+	// PublishEvent publishes an event. An optional hierarchy of event names can be provided.
+	PublishEvent(message []byte, event ...string) error
+
+	// Connect to the given MQTT server(s)
+	Connect(servers ...string) error
+
+	// IsConnected returns true of the client is currently connected to MQTT server(s)
+	IsConnected() bool
+
+	// Disconnect from the MQTT server(s)
+	Disconnect()
+}
+
+func DefaultOptions(id *ID, credentials *Credentials) *ThingOptions {
+	return &ThingOptions{
 		ID:                  id,
 		Credentials:         credentials,
 		ConfigQOS:           2,
@@ -133,191 +148,7 @@ func New(id *ID, credentials *Credentials) *Thing {
 	}
 }
 
-// PublishState publishes the current device state
-func (t *Thing) PublishState(message []byte) error {
-	return t.publish(t.stateTopic(), message, t.StateQOS)
-}
-
-// PublishEvent publishes an event. An optional hierarchy of event names can be provided.
-func (t *Thing) PublishEvent(message []byte, event ...string) error {
-	return t.publish(t.eventsTopic(event...), message, t.EventQOS)
-}
-
-// Connect to the given MQTT server(s)
-func (t *Thing) Connect(servers ...string) error {
-	if t.IsConnected() {
-		return nil
-	}
-	if t.ID == nil || t.Credentials == nil {
-		return ErrConfigurationError
-	}
-	if t.AuthTokenExpiration == 0 {
-		t.AuthTokenExpiration = DefaultAuthTokenExpiration
-	}
-
-	var store mqtt.Store
-	if t.QueueDirectory == "" {
-		store = mqtt.NewMemoryStore()
-	} else {
-		store = mqtt.NewFileStore(t.QueueDirectory)
-	}
-
-	options := mqtt.NewClientOptions()
-
-	options.SetTLSConfig(&tls.Config{
-		Certificates:       []tls.Certificate{t.Credentials.Certificate},
-		InsecureSkipVerify: true,
-	})
-
-	options.SetCleanSession(false)
-	options.SetAutoReconnect(true)
-	options.SetProtocolVersion(4)
-	options.SetClientID(t.clientID())
-	options.SetUsername("unused")
-	options.SetStore(store)
-	options.SetOnConnectHandler(func(i mqtt.Client) {
-		t.infof("Connected")
-	})
-	options.SetConnectionLostHandler(func(client mqtt.Client, e error) {
-		t.errorf("Connection Lost. Error: %v", e)
-	})
-
-	t.publishTicker = time.NewTicker(time.Second * 2)
-
-	for _, server := range servers {
-		options.AddBroker(server)
-	}
-
-	options.SetCredentialsProvider(func() (username string, password string) {
-		authToken, err := t.authToken()
-		if err != nil {
-			t.errorf("Error generating auth token: %v", err)
-			return "", ""
-		}
-		return "unused", authToken
-	})
-
-	t.client = mqtt.NewClient(options)
-
-	connectToken := t.client.Connect()
-	for !connectToken.WaitTimeout(time.Second) {
-		t.debugf("PENDING CONNECT")
-	}
-	if connectToken.Error() != nil {
-		return connectToken.Error()
-	}
-
-	t.client.Subscribe(t.configTopic(), t.ConfigQOS, t.configHandler)
-
-	return nil
-}
-
-// IsConnected returns true of the client is currently connected to MQTT server(s)
-func (t *Thing) IsConnected() bool {
-	return t.client != nil && t.client.IsConnected()
-}
-
-// Disconnect from the MQTT server(s)
-func (t *Thing) Disconnect() {
-	if t.client != nil {
-		t.client.Unsubscribe(t.configTopic())
-		if t.client.IsConnected() {
-			t.infof("Disconnecting")
-			t.client.Disconnect(1000)
-		}
-	}
-}
-
-// Internal methods
-
-func (t *Thing) clientID() string {
-	return fmt.Sprintf("projects/%s/locations/%s/registries/%s/devices/%s", t.ID.ProjectID, t.ID.Location, t.ID.Registry, t.ID.DeviceID)
-}
-
-func (t *Thing) authToken() (string, error) {
-	wt := jwt.New(jwt.GetSigningMethod("RS256"))
-
-	expirationInterval := t.AuthTokenExpiration
-	if expirationInterval == 0 {
-		expirationInterval = time.Hour
-	}
-
-	wt.Claims = &jwt.StandardClaims{
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(expirationInterval).Unix(),
-		Audience:  t.ID.ProjectID,
-	}
-
-	t.debugf("Auth Token: %+v", wt.Claims)
-
-	token, err := wt.SignedString(t.Credentials.PrivateKey)
-	if err != nil {
-		return "", err
-	}
-
-	return token, nil
-}
-
-func (t *Thing) configTopic() string {
-	return fmt.Sprintf("/devices/%s/config", t.ID.DeviceID)
-}
-
-func (t *Thing) stateTopic() string {
-	return fmt.Sprintf("/devices/%s/state", t.ID.DeviceID)
-}
-
-func (t *Thing) eventsTopic(subTopic ...string) string {
-	if len(subTopic) == 0 {
-		return fmt.Sprintf("/devices/%s/events", t.ID.DeviceID)
-	}
-	return fmt.Sprintf("/devices/%s/events/%s", t.ID.DeviceID, strings.Join(subTopic, "/"))
-}
-
-func (t *Thing) configHandler(i mqtt.Client, message mqtt.Message) {
-	t.debugf("RECEIVED - Topic: %s, Message Length: %d bytes", message.Topic(), len(message.Payload()))
-	if t.ConfigHandler != nil {
-		t.ConfigHandler(t, message.Payload())
-	}
-}
-
-func (t *Thing) publish(topic string, message []byte, qos uint8) error {
-	<-t.publishTicker.C // Don't publish more than once per second
-	token := t.client.Publish(topic, qos, true, message)
-	if !token.WaitTimeout(time.Second) {
-		t.debugf("SEND TIMEOUT - Topic: %s, Message Length: %d bytes", topic, len(message))
-		return ErrPublishFailed
-	} else if token.Error() != nil {
-		t.debugf("SEND FAILED - Topic: %s, Message Length: %d bytes, Error: %v", topic, len(message), token.Error())
-		return token.Error()
-	} else {
-		t.debugf("SENT - Topic: %s, Message Length: %d bytes", topic, len(message))
-		return nil
-	}
-}
-
-func (t *Thing) log(level string, msg string) {
-	if t.Logger != nil {
-		t.Logger(fmt.Sprintf("|%s| %s", level, msg))
-	}
-}
-
-func (t *Thing) debugf(format string, v ...interface{}) {
-	if t.Logger != nil && t.LogLevel >= LogLevelDebug {
-		msg := fmt.Sprintf(format, v...)
-		t.log("DEBUG", msg)
-	}
-}
-
-func (t *Thing) infof(format string, v ...interface{}) {
-	if t.Logger != nil && t.LogLevel >= LogLevelInfo {
-		msg := fmt.Sprintf(format, v...)
-		t.log("INFO", msg)
-	}
-}
-
-func (t *Thing) errorf(format string, v ...interface{}) {
-	if t.Logger != nil && t.LogLevel >= LogLevelError {
-		msg := fmt.Sprintf(format, v...)
-		t.log("ERROR", msg)
-	}
+// New returns a new Thing using the given options.
+func New(options *ThingOptions) Thing {
+	return &thing{options: options}
 }
