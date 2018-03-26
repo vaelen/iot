@@ -23,8 +23,9 @@ if err != nil {
 }
 
 options := iot.DefaultOptions(id, credentials)
-options.Logger = func(msg string) { fmt.Println(msg) }
-options.LogLevel = iot.LogLevelDebug
+options.DebugLogger = func(a ...interface{}) { fmt.Println(a...) }
+options.InfoLogger = func(a ...interface{}) { fmt.Println(a...) }
+options.ErrorLogger = func(a ...interface{}) { fmt.Println(a...) }
 options.QueueDirectory = tmpDir
 options.ConfigHandler = func(thing iot.Thing, config []byte) {
 	// Do something here to process the updated config and create an updated state string
