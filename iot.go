@@ -8,9 +8,10 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"io/ioutil"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 // DefaultAuthTokenExpiration is the default value for Thing.AuthTokenExpiration
@@ -29,18 +30,7 @@ var ErrConfigurationError = fmt.Errorf("required configuration values are mising
 type ConfigHandler func(thing Thing, config []byte)
 
 // Logger is used to write log output.  If no Logger is provided, no logging will be performed.
-type Logger func(msg string)
-
-// LogLevel determines how verbose the logging is
-type LogLevel uint8
-
-const (
-	LogLevelOff   LogLevel = 0
-	LogLevelError LogLevel = 1
-	LogLevelWarn  LogLevel = 2
-	LogLevelInfo  LogLevel = 3
-	LogLevelDebug LogLevel = 4
-)
+type Logger func(args ...interface{})
 
 // ID represents the various components that uniquely identify this device
 type ID struct {
@@ -86,12 +76,15 @@ type ThingOptions struct {
 	// Credentials are used to authenticate with the server.
 	// This value is required.
 	Credentials *Credentials
-	// Logger is used to print log output.
+	// DebugLogger is used to print debug level log output.
 	// If no Logger is provided, no logging will occur.
-	Logger Logger
-	// LogLevel determines the verbosity of the log output.
-	// The default value will produce no logging.
-	LogLevel LogLevel
+	DebugLogger Logger
+	// InfoLogger is used to print info level log output.
+	// If no Logger is provided, no logging will occur.
+	InfoLogger Logger
+	// ErrorLogger is used to print error level log output.
+	// If no Logger is provided, no logging will occur.
+	ErrorLogger Logger
 	// LogMQTT enables logging of the underlying MQTT client.
 	// If enabled, the underlying MQTT client will log at the same level as the Thing itself (WARN, DEBUG, etc).
 	LogMQTT bool

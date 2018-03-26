@@ -5,12 +5,13 @@ package examples
 
 import (
 	"fmt"
-	"github.com/vaelen/iot"
 	"os"
 	"os/exec"
 	"os/signal"
 	"sync"
 	"time"
+
+	"github.com/vaelen/iot"
 )
 
 type SensorReader struct {
@@ -45,7 +46,8 @@ func (sr *SensorReader) log(msg string) {
 	}
 }
 
-func NewSensorReader(id *iot.ID, credentials *iot.Credentials, queueDirectory string, logger iot.Logger, logLevel iot.LogLevel, servers ...string) (*SensorReader, error) {
+// NewSensorReader creates a new sensor reader
+func NewSensorReader(id *iot.ID, credentials *iot.Credentials, queueDirectory string, logger iot.Logger, servers ...string) (*SensorReader, error) {
 
 	sr := &SensorReader{
 		stop:    make(chan bool),
@@ -54,8 +56,9 @@ func NewSensorReader(id *iot.ID, credentials *iot.Credentials, queueDirectory st
 	}
 
 	options := iot.DefaultOptions(id, credentials)
-	options.Logger = logger
-	options.LogLevel = logLevel
+	options.DebugLogger = logger
+	options.InfoLogger = logger
+	options.ErrorLogger = logger
 	options.QueueDirectory = queueDirectory
 	options.ConfigHandler = func(thing iot.Thing, config []byte) {
 		sr.log("Config Received, Sending State")

@@ -5,15 +5,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/vaelen/iot"
-	"github.com/vaelen/iot/examples"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"os"
+
+	"github.com/vaelen/iot"
+	"github.com/vaelen/iot/examples"
+	"gopkg.in/yaml.v2"
 )
 
-func logMessage(msg string) {
+func logMessage(msg ...interface{}) {
 	log.Println(msg)
 }
 
@@ -23,6 +24,7 @@ func handleError(description string, err error) {
 	}
 }
 
+// Config contains the configuration options for a sensor reader
 type Config struct {
 	ID          iot.ID
 	Certificate string
@@ -52,7 +54,7 @@ func main() {
 	queueDirectory, err := ioutil.TempDir("", "iot-queue-")
 	handleError("Couldn't create queue directory", err)
 
-	sr, err := examples.NewSensorReader(&config.ID, credentials, queueDirectory, logMessage, iot.LogLevelDebug, config.Server)
+	sr, err := examples.NewSensorReader(&config.ID, credentials, queueDirectory, logMessage, config.Server)
 	handleError("Couldn't start sensor reader", err)
 
 	sr.Wait()

@@ -6,10 +6,11 @@ package iot
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/eclipse/paho.mqtt.golang"
 	"strings"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
+	"github.com/eclipse/paho.mqtt.golang"
 )
 
 type ClientConstructor func(*mqtt.ClientOptions) mqtt.Client
@@ -89,23 +90,10 @@ func (t *thing) Connect(servers ...string) error {
 	t.client = NewClient(options)
 
 	if t.options.LogMQTT {
-		mqttLogger := &thingMQTTLogger{t}
-
-		if t.options.LogLevel > LogLevelOff {
-			mqtt.CRITICAL = mqttLogger
-		}
-
-		if t.options.LogLevel >= LogLevelError {
-			mqtt.ERROR = mqttLogger
-		}
-
-		if t.options.LogLevel >= LogLevelWarn {
-			mqtt.WARN = mqttLogger
-		}
-
-		if t.options.LogLevel >= LogLevelDebug {
-			mqtt.DEBUG = mqttLogger
-		}
+		mqtt.CRITICAL = &thingMQTTLogger{t.options.ErrorLogger}
+		mqtt.ERROR = &thingMQTTLogger{t.options.ErrorLogger}
+		mqtt.WARN = &thingMQTTLogger{t.options.InfoLogger}
+		mqtt.DEBUG = &thingMQTTLogger{t.options.DebugLogger}
 	}
 
 	connectToken := t.client.Connect()
@@ -204,49 +192,37 @@ func (t *thing) publish(topic string, message []byte, qos uint8) error {
 	}
 }
 
-func (t *thing) isLogging(level LogLevel) bool {
-	return t.options.Logger != nil && t.options.LogLevel >= level
-}
-
-func (t *thing) log(level string, msg string) {
-	if t.options.Logger != nil {
-		t.options.Logger(fmt.Sprintf("|%s| %s", level, msg))
+func (t *thing) log(logger Logger, format string, v ...interface{}) {
+	if logger != nil {
+		msg := fmt.Sprintf(format, v...)
+		logger(msg)
 	}
 }
 
 func (t *thing) debugf(format string, v ...interface{}) {
-	if t.isLogging(LogLevelDebug) {
-		msg := fmt.Sprintf(format, v...)
-		t.log("DEBUG", msg)
-	}
+	t.log(t.options.DebugLogger, format, v)
 }
 
 func (t *thing) infof(format string, v ...interface{}) {
-	if t.isLogging(LogLevelInfo) {
-		msg := fmt.Sprintf(format, v...)
-		t.log("INFO", msg)
-	}
+	t.log(t.options.InfoLogger, format, v)
 }
 
 func (t *thing) errorf(format string, v ...interface{}) {
-	if t.isLogging(LogLevelError) {
-		msg := fmt.Sprintf(format, v...)
-		t.log("ERROR", msg)
-	}
+	t.log(t.options.ErrorLogger, format, v)
 }
 
 type thingMQTTLogger struct {
-	thing *thing
+	logger Logger
 }
 
 func (l *thingMQTTLogger) Println(v ...interface{}) {
-	if l.thing.options.Logger != nil {
-		l.thing.options.Logger(fmt.Sprint(v...))
+	if l.logger != nil {
+		l.logger(v...)
 	}
 }
 
 func (l *thingMQTTLogger) Printf(format string, v ...interface{}) {
-	if l.thing.options.Logger != nil {
-		l.thing.options.Logger(fmt.Sprintf(format, v...))
+	if l.logger != nil {
+		l.logger(fmt.Sprintf(format, v...))
 	}
 }
