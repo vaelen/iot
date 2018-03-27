@@ -13,8 +13,11 @@ import (
 	"github.com/eclipse/paho.mqtt.golang"
 )
 
+// ClientConstructor defines a function for creating an MQTT client instance
 type ClientConstructor func(*mqtt.ClientOptions) mqtt.Client
 
+// NewClient is the ClientConstructor used to create MQTT client instances
+// Override this value during testing to provide an MQTT client mock implementation
 var NewClient ClientConstructor = mqtt.NewClient
 
 type thing struct {
@@ -200,15 +203,15 @@ func (t *thing) log(logger Logger, format string, v ...interface{}) {
 }
 
 func (t *thing) debugf(format string, v ...interface{}) {
-	t.log(t.options.DebugLogger, format, v)
+	t.log(t.options.DebugLogger, format, v...)
 }
 
 func (t *thing) infof(format string, v ...interface{}) {
-	t.log(t.options.InfoLogger, format, v)
+	t.log(t.options.InfoLogger, format, v...)
 }
 
 func (t *thing) errorf(format string, v ...interface{}) {
-	t.log(t.options.ErrorLogger, format, v)
+	t.log(t.options.ErrorLogger, format, v...)
 }
 
 type thingMQTTLogger struct {

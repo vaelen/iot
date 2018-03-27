@@ -4,7 +4,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -13,10 +12,6 @@ import (
 	"github.com/vaelen/iot/examples"
 	"gopkg.in/yaml.v2"
 )
-
-func logMessage(msg ...interface{}) {
-	log.Println(msg)
-}
 
 func handleError(description string, err error) {
 	if err != nil {
@@ -46,7 +41,7 @@ func main() {
 	err = yaml.Unmarshal(configBytes, config)
 	handleError("Couldn't parse config", err)
 
-	logMessage(fmt.Sprintf("Config: %+v", config))
+	log.Printf("Config: %+v", config)
 
 	credentials, err := iot.LoadCredentials(config.Certificate, config.PrivateKey)
 	handleError("Couldn't load credentials", err)
@@ -54,7 +49,7 @@ func main() {
 	queueDirectory, err := ioutil.TempDir("", "iot-queue-")
 	handleError("Couldn't create queue directory", err)
 
-	sr, err := examples.NewSensorReader(&config.ID, credentials, queueDirectory, logMessage, config.Server)
+	sr, err := examples.NewSensorReader(&config.ID, credentials, queueDirectory, log.Println, config.Server)
 	handleError("Couldn't start sensor reader", err)
 
 	sr.Wait()

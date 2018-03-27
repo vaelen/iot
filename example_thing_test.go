@@ -4,8 +4,8 @@
 package iot_test
 
 import (
-	"fmt"
 	"io/ioutil"
+	"log"
 
 	"github.com/vaelen/iot"
 )
@@ -29,9 +29,9 @@ func ExampleThing() {
 	}
 
 	options := iot.DefaultOptions(id, credentials)
-	options.DebugLogger = func(a ...interface{}) { fmt.Println(a...) }
-	options.InfoLogger = func(a ...interface{}) { fmt.Println(a...) }
-	options.ErrorLogger = func(a ...interface{}) { fmt.Println(a...) }
+	options.DebugLogger = log.Println
+	options.InfoLogger = log.Println
+	options.ErrorLogger = log.Println
 	options.QueueDirectory = tmpDir
 	options.ConfigHandler = func(thing iot.Thing, config []byte) {
 		// Do something here to process the updated config and create an updated state string

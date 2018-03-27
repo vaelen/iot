@@ -1,7 +1,7 @@
 // Copyright 2018, Andrew C. Young
 // License: MIT
 
-// This package provides a simple implementation of a Google IoT Core device.
+// Package iot provides a simple implementation of a Google IoT Core device.
 package iot
 
 import (
@@ -17,7 +17,7 @@ import (
 // DefaultAuthTokenExpiration is the default value for Thing.AuthTokenExpiration
 const DefaultAuthTokenExpiration = time.Hour
 
-// ErrNoConnected is returned if a message is published but the client is not connected
+// ErrNotConnected is returned if a message is published but the client is not connected
 var ErrNotConnected = fmt.Errorf("not connected")
 
 // ErrPublishFailed is returned if the client was unable to send the message
@@ -69,6 +69,7 @@ func LoadCredentials(certificatePath string, privateKeyPath string) (*Credential
 	}, nil
 }
 
+// ThingOptions holds the options that are used to create a Thing
 type ThingOptions struct {
 	// ID identifies this device.
 	// This value is required.
@@ -113,6 +114,7 @@ type ThingOptions struct {
 	AuthTokenExpiration time.Duration
 }
 
+// Thing represents an IoT device
 type Thing interface {
 	// PublishState publishes the current device state
 	PublishState(message []byte) error
@@ -130,6 +132,7 @@ type Thing interface {
 	Disconnect()
 }
 
+// DefaultOptions returns the default set of options.
 func DefaultOptions(id *ID, credentials *Credentials) *ThingOptions {
 	return &ThingOptions{
 		ID:                  id,
