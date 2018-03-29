@@ -1,41 +1,42 @@
 // Copyright 2018, Andrew C. Young
 // License: MIT
 
-//+build !test
-
-package iot
+package paho
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
 
+	"github.com/vaelen/iot"
 	mqtt "github.com/vaelen/paho.mqtt.golang"
 )
 
-// PahoMQTTClient is an implementation of PahoMQTTClient that uses Eclipse Paho.
-type PahoMQTTClient struct {
-	thing               Thing
-	options             *ThingOptions
+// MQTTClient is an implementation of MQTTClient that uses Eclipse Paho.
+type MQTTClient struct {
+	thing               iot.Thing
+	options             *iot.ThingOptions
 	clientID            string
 	client              mqtt.Client
-	credentialsProvider MQTTCredentialsProvider
+	credentialsProvider iot.MQTTCredentialsProvider
 }
 
-// NewPahoClient creates an MQTTClient instance using Eclipse Paho.
-func NewPahoClient(thing Thing, options *ThingOptions) MQTTClient {
-	return &PahoMQTTClient{
+// NewClient creates an MQTTClient instance using Eclipse Paho.
+func NewClient(thing iot.Thing, options *iot.ThingOptions) iot.MQTTClient {
+	return &MQTTClient{
 		thing:   thing,
 		options: options,
 	}
 }
 
 func init() {
-	NewClient = NewPahoClient
+	if iot.NewClient == nil {
+		iot.NewClient = NewClient
+	}
 }
 
 // IsConnected should return true when the client is connected to the server
-func (c *PahoMQTTClient) IsConnected() bool {
+func (c *MQTTClient) IsConnected() bool {
 	if c.client == nil {
 		return false
 	}
@@ -43,7 +44,7 @@ func (c *PahoMQTTClient) IsConnected() bool {
 }
 
 // Connect should connect to the given MQTT server
-func (c *PahoMQTTClient) Connect(ctx context.Context, servers ...string) error {
+func (c *MQTTClient) Connect(ctx context.Context, servers ...string) error {
 
 	clientOptions := mqtt.NewClientOptions()
 
@@ -90,7 +91,7 @@ func (c *PahoMQTTClient) Connect(ctx context.Context, servers ...string) error {
 }
 
 // Disconnect will disconnect from the given MQTT server and clean up all client resources
-func (c *PahoMQTTClient) Disconnect(ctx context.Context) error {
+func (c *MQTTClient) Disconnect(ctx context.Context) error {
 	if c.IsConnected() {
 		c.client.Disconnect(1000)
 		c.client = nil
@@ -99,9 +100,9 @@ func (c *PahoMQTTClient) Disconnect(ctx context.Context) error {
 }
 
 // Publish will publish the given payload to the given topic with the given quality of service level
-func (c *PahoMQTTClient) Publish(ctx context.Context, topic string, qos uint8, payload interface{}) error {
+func (c *MQTTClient) Publish(ctx context.Context, topic string, qos uint8, payload interface{}) error {
 	if !c.IsConnected() {
-		return ErrNotConnected
+		return iot.ErrNotConnected
 	}
 	token := c.client.Publish(topic, qos, true, payload)
 	token.Wait()
@@ -109,9 +110,9 @@ func (c *PahoMQTTClient) Publish(ctx context.Context, topic string, qos uint8, p
 }
 
 // Subscribe will subscribe to the given topic with the given quality of service level and message handler
-func (c *PahoMQTTClient) Subscribe(ctx context.Context, topic string, qos uint8, callback ConfigHandler) error {
+func (c *MQTTClient) Subscribe(ctx context.Context, topic string, qos uint8, callback iot.ConfigHandler) error {
 	if !c.IsConnected() {
-		return ErrNotConnected
+		return iot.ErrNotConnected
 	}
 	handler := func(i mqtt.Client, message mqtt.Message) {
 		if c.options.DebugLogger != nil {
@@ -127,9 +128,9 @@ func (c *PahoMQTTClient) Subscribe(ctx context.Context, topic string, qos uint8,
 }
 
 // Unsubscribe will unsubscribe from the given topic
-func (c *PahoMQTTClient) Unsubscribe(ctx context.Context, topic string) error {
+func (c *MQTTClient) Unsubscribe(ctx context.Context, topic string) error {
 	if !c.IsConnected() {
-		return ErrNotConnected
+		return iot.ErrNotConnected
 	}
 	token := c.client.Unsubscribe(topic)
 	token.Wait()
@@ -137,33 +138,33 @@ func (c *PahoMQTTClient) Unsubscribe(ctx context.Context, topic string) error {
 }
 
 // SetDebugLogger sets the logger to use for logging debug messages
-func (c *PahoMQTTClient) SetDebugLogger(logger Logger) {
+func (c *MQTTClient) SetDebugLogger(logger iot.Logger) {
 	mqtt.DEBUG = &pahoLogger{logger}
 }
 
 // SetInfoLogger sets the logger to use for logging information or warning messages
-func (c *PahoMQTTClient) SetInfoLogger(logger Logger) {
+func (c *MQTTClient) SetInfoLogger(logger iot.Logger) {
 	mqtt.WARN = &pahoLogger{logger}
 }
 
 // SetErrorLogger sets the logger to use for logging error or critical messages
-func (c *PahoMQTTClient) SetErrorLogger(logger Logger) {
+func (c *MQTTClient) SetErrorLogger(logger iot.Logger) {
 	mqtt.CRITICAL = &pahoLogger{logger}
 	mqtt.ERROR = &pahoLogger{logger}
 }
 
 // SetClientID sets the MQTT client id
-func (c *PahoMQTTClient) SetClientID(clientID string) {
+func (c *MQTTClient) SetClientID(clientID string) {
 	c.clientID = clientID
 }
 
 // SetCredentialsProvider sets the CredentialsProvider used by the MQTT client
-func (c *PahoMQTTClient) SetCredentialsProvider(credentialsProvider MQTTCredentialsProvider) {
+func (c *MQTTClient) SetCredentialsProvider(credentialsProvider iot.MQTTCredentialsProvider) {
 	c.credentialsProvider = credentialsProvider
 }
 
 type pahoLogger struct {
-	logger Logger
+	logger iot.Logger
 }
 
 func (l *pahoLogger) Println(v ...interface{}) {

@@ -5,6 +5,10 @@ A simple framework for implementing a Google IoT device.
 
 This package makes use of the [context package] to handle request cancelation, timeouts, and deadlines.
 
+[![cover.run go](https://cover.run/go/github.com/vaelen/iot.svg?tag=golang-1.10)](https://cover.run/go/github.com/vaelen/iot?tag=golang-1.10)
+[![Go Report Card](https://goreportcard.com/badge/github.com/vaelen/iot)](https://goreportcard.com/report/github.com/vaelen/iot)
+[![Go Docs](https://godoc.org/github.com/vaelen/iot?status.svg)](https://godoc.org/github.com/vaelen/iot)
+
 Here is an example showing how to use this library:
 ```go
 ctx := context.Background()

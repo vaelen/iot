@@ -23,10 +23,11 @@ type SensorReader struct {
 	logger  iot.Logger
 	wg      sync.WaitGroup
 	cfg     string
+	command string
 }
 
 func (sr *SensorReader) getTelemetry() []byte {
-	cmd := exec.Command("/usr/bin/sensors")
+	cmd := exec.Command(sr.command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		output = []byte(fmt.Sprintf("ERROR: %v", err))
@@ -56,6 +57,7 @@ func NewSensorReader(id *iot.ID, credentials *iot.Credentials, queueDirectory st
 		stop:    make(chan bool),
 		stopped: make(chan error),
 		logger:  logger,
+		command: "/usr/bin/sensors",
 	}
 
 	options := iot.DefaultOptions(id, credentials)
