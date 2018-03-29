@@ -2,6 +2,8 @@
 // License: MIT
 
 // Package iot provides a simple implementation of a Google IoT Core device.
+//
+// Note: Your application must import the iot/paho package to use the default Eclipse Paho MQTT client.
 package iot
 
 import (

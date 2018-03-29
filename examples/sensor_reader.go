@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/vaelen/iot"
+	// This import is required to load the paho MQTT client
 	_ "github.com/vaelen/iot/paho"
 )
 
