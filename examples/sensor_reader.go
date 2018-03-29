@@ -15,6 +15,7 @@ import (
 	"github.com/vaelen/iot"
 )
 
+// SensorReader is a Google IoT Core device that reads device sensors
 type SensorReader struct {
 	thing   iot.Thing
 	stop    chan bool
@@ -109,11 +110,13 @@ func (sr *SensorReader) processingLoop() {
 	}
 }
 
+// Close shuts down the SensorReader
 func (sr *SensorReader) Close() error {
 	sr.stop <- true
 	return <-sr.stopped
 }
 
+// Wait blocks until the SensorReader has stopped
 func (sr *SensorReader) Wait() {
 	sr.wg.Wait()
 }
