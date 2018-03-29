@@ -1,6 +1,8 @@
 // Copyright 2018, Andrew C. Young
 // License: MIT
 
+//+build !test
+
 package iot
 
 import (
@@ -26,6 +28,10 @@ func NewPahoClient(thing Thing, options *ThingOptions) MQTTClient {
 		thing:   thing,
 		options: options,
 	}
+}
+
+func init() {
+	NewClient = NewPahoClient
 }
 
 // IsConnected should return true when the client is connected to the server

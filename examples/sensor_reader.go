@@ -4,6 +4,7 @@
 package examples
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,6 +49,7 @@ func (sr *SensorReader) log(msg string) {
 
 // NewSensorReader creates a new sensor reader
 func NewSensorReader(id *iot.ID, credentials *iot.Credentials, queueDirectory string, logger iot.Logger, servers ...string) (*SensorReader, error) {
+	ctx := context.Background()
 
 	sr := &SensorReader{
 		stop:    make(chan bool),
@@ -63,12 +65,12 @@ func NewSensorReader(id *iot.ID, credentials *iot.Credentials, queueDirectory st
 	options.ConfigHandler = func(thing iot.Thing, config []byte) {
 		sr.log("Config Received, Sending State")
 		sr.updateConfig(config)
-		thing.PublishState(sr.getState())
+		thing.PublishState(ctx, sr.getState())
 	}
 
 	thing := iot.New(options)
 
-	err := thing.Connect(servers...)
+	err := thing.Connect(ctx, servers...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +86,8 @@ func NewSensorReader(id *iot.ID, credentials *iot.Credentials, queueDirectory st
 func (sr *SensorReader) processingLoop() {
 	defer sr.wg.Done()
 
+	ctx := context.Background()
+
 	// Set up channel on which to send signal notifications.
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, os.Kill)
@@ -92,13 +96,13 @@ func (sr *SensorReader) processingLoop() {
 	for {
 		select {
 		case <-t.C:
-			sr.thing.PublishEvent(sr.getTelemetry())
+			sr.thing.PublishEvent(ctx, sr.getTelemetry())
 		case <-sigc:
 			// Disconnect the Network Connection.
-			sr.thing.Disconnect()
+			sr.thing.Disconnect(ctx)
 			return
 		case <-sr.stop:
-			sr.thing.Disconnect()
+			sr.thing.Disconnect(ctx)
 			sr.stopped <- nil
 			return
 		}

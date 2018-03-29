@@ -32,7 +32,7 @@ type ClientConstructor func(thing Thing, options *ThingOptions) MQTTClient
 
 // NewClient is the ClientConstructor used to create MQTT client instances
 // Override this value during testing to provide an MQTT client mock implementation
-var NewClient ClientConstructor = NewPahoClient
+var NewClient ClientConstructor
 
 // ConfigHandler handles configuration updates received from the server.
 type ConfigHandler func(thing Thing, config []byte)

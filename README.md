@@ -53,6 +53,8 @@ thing.PublishEvent(ctx, []byte("Sub folder telemetry event"), "a")
 thing.PublishEvent(ctx, []byte("Sub folder telemetry event"), "a", "b")
 ```
 
+Note: Current test coverage is around 90% excluding the Paho specific code.  To exclude the Paho code from test coverage analysis, add `-tags=test` to the `go test` command line.
+
 Copyright 2018, Andrew C. Young <<andrew@vaelen.org>>
 
 License: [MIT]

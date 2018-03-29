@@ -83,7 +83,18 @@ func TestThing(t *testing.T) {
 		t.Fatalf("Couldn't load credentials: %v", err)
 	}
 
-	options := iot.DefaultOptions(TestID, credentials)
+	options := &iot.ThingOptions{}
+	thing := iot.New(options)
+	if thing == nil {
+		t.Fatal("Thing was not returned from New() with bad options")
+	}
+
+	err = thing.Connect(ctx, "bad options")
+	if err != iot.ErrConfigurationError {
+		t.Fatalf("Wrong error returned from Connect() with invalid options: %v", err)
+	}
+
+	options = iot.DefaultOptions(TestID, credentials)
 	if options == nil {
 		t.Fatal("Options structure wasn't returned")
 	}
@@ -94,6 +105,7 @@ func TestThing(t *testing.T) {
 
 	var configReceived []byte
 
+	options.AuthTokenExpiration = 0
 	options.DebugLogger = func(a ...interface{}) { fmt.Fprint(debugWriter, a...) }
 	options.InfoLogger = func(a ...interface{}) { fmt.Fprint(infoWriter, a...) }
 	options.ErrorLogger = func(a ...interface{}) { fmt.Fprint(errorWriter, a...) }
@@ -104,7 +116,7 @@ func TestThing(t *testing.T) {
 		thing.PublishState(ctx, state)
 	}
 
-	thing := iot.New(options)
+	thing = iot.New(options)
 	if thing == nil {
 		t.Fatal("Thing wasn't returned from New()")
 	}
@@ -132,8 +144,23 @@ func TestThing(t *testing.T) {
 		t.Fatal("Thing thinks it is not connected when it really is")
 	}
 
+	err = thing.Connect(ctx, "already connected")
+	if err != nil {
+		t.Fatalf("Calling Connect() while already connected returned an error: %v", err)
+	}
+
+	if len(mockClient.ConnectedTo) < 1 || mockClient.ConnectedTo[0] != serverAddress {
+		t.Fatalf("Calling Connect() while already conected caused client to reconnect: %v", mockClient.ConnectedTo)
+	}
+
 	if mockClient.CredentialsProvider == nil {
 		t.Fatal("Credentials provider not set")
+	}
+
+	options.AuthTokenExpiration = 0
+	username, password := mockClient.CredentialsProvider()
+	if username == "" || password == "" {
+		t.Fatalf("Bad username and/or password returned. Username: %v, Password: %v", username, password)
 	}
 
 	if mockClient.DebugLogger == nil {
