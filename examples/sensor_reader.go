@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/vaelen/iot"
+	_ "github.com/vaelen/iot/paho"
 )
 
 // SensorReader is a Google IoT Core device that reads device sensors

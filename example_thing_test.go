@@ -12,6 +12,11 @@ import (
 func ExampleThing() {
 	ctx := context.Background()
 
+	// Your client must include the paho package
+	// to use the default Eclipse Paho MQTT client.
+	//
+	// include 	_ "github.com/vaelen/iot/paho"
+
 	id := &ID{
 		DeviceID:  "deviceName",
 		Registry:  "my-registry",

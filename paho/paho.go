@@ -1,6 +1,8 @@
 // Copyright 2018, Andrew C. Young
 // License: MIT
 
+// Package paho provides an iot.MQTTClient implementation that uses the Eclipse Paho MQTT client.
+// To use the client, you must import this package.
 package paho
 
 import (
@@ -13,6 +15,7 @@ import (
 )
 
 // MQTTClient is an implementation of MQTTClient that uses Eclipse Paho.
+// To use the client, you must include this package.
 type MQTTClient struct {
 	thing               iot.Thing
 	options             *iot.ThingOptions
@@ -29,6 +32,7 @@ func NewClient(thing iot.Thing, options *iot.ThingOptions) iot.MQTTClient {
 	}
 }
 
+// This method is automatically called if the package is included
 func init() {
 	if iot.NewClient == nil {
 		iot.NewClient = NewClient

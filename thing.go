@@ -40,6 +40,9 @@ func (t *thing) Connect(ctx context.Context, servers ...string) error {
 		t.options.AuthTokenExpiration = DefaultAuthTokenExpiration
 	}
 
+	if NewClient == nil {
+		panic("No MQTT client specified. Please import the iot/paho package.")
+	}
 	t.client = NewClient(t, t.options)
 
 	if t.options.LogMQTT {
