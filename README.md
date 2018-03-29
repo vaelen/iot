@@ -19,7 +19,6 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
 	"log"
 	"github.com/vaelen/iot"
 	// Your client must include the paho package
@@ -30,35 +29,29 @@ import (
 func main() {
 	ctx := context.Background()
 
-	id := &ID{
+	id := &iot.ID{
 		DeviceID:  "deviceName",
 		Registry:  "my-registry",
 		Location:  "asia-east1",
 		ProjectID: "my-project",
 	}
 
-	credentials, err := LoadCredentials("rsa_cert.pem", "rsa_private.pem")
+	credentials, err := iot.LoadCredentials("rsa_cert.pem", "rsa_private.pem")
 	if err != nil {
 		panic("Couldn't load credentials")
 	}
 
-	tmpDir, err := ioutil.TempDir("", "queue-")
-	if err != nil {
-		panic("Couldn't create temp directory")
-	}
-
-	options := DefaultOptions(id, credentials)
+	options := iot.DefaultOptions(id, credentials)
 	options.DebugLogger = log.Println
 	options.InfoLogger = log.Println
 	options.ErrorLogger = log.Println
-	options.QueueDirectory = tmpDir
-	options.ConfigHandler = func(thing Thing, config []byte) {
+	options.ConfigHandler = func(thing iot.Thing, config []byte) {
 		// Do something here to process the updated config and create an updated state string
 		state := []byte("ok")
 		thing.PublishState(ctx, state)
 	}
 
-	thing := New(options)
+	thing := iot.New(options)
 
 	err = thing.Connect(ctx, "ssl://mqtt.googleapis.com:443")
 	if err != nil {
