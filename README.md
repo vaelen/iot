@@ -3,8 +3,12 @@ IoT
 
 A simple framework for implementing a Google IoT device.
 
+This package makes use of the [context package] to handle request cancelation, timeouts, and deadlines.
+
 Here is an example showing how to use this library:
 ```go
+ctx := context.Background()
+
 id := &iot.ID{
 	DeviceID:  "deviceName",
 	Registry:  "my-registry",
@@ -30,27 +34,32 @@ options.QueueDirectory = tmpDir
 options.ConfigHandler = func(thing iot.Thing, config []byte) {
 	// Do something here to process the updated config and create an updated state string
 	state := []byte("ok")
-	thing.PublishState(state)
+	thing.PublishState(ctx, state)
 }
 
 thing := iot.New(options)
 
-err = thing.Connect("ssl://mqtt.googleapis.com:443")
+err = thing.Connect(ctx, "ssl://mqtt.googleapis.com:443")
 if err != nil {
 	panic("Couldn't connect to server")
 }
-defer thing.Disconnect()
+defer thing.Disconnect(ctx)
 
 // This publishes to /events
-thing.PublishEvent([]byte("Top level telemetry event"))
+thing.PublishEvent(ctx, []byte("Top level telemetry event"))
 // This publishes to /events/a
-thing.PublishEvent([]byte("Sub folder telemetry event"), "a")
+thing.PublishEvent(ctx, []byte("Sub folder telemetry event"), "a")
 // This publishes to /events/a/b
-thing.PublishEvent([]byte("Sub folder telemetry event"), "a", "b")
+thing.PublishEvent(ctx, []byte("Sub folder telemetry event"), "a", "b")
 ```
 
-Copyright 2018, Andrew C. Young <andrew@vaelen.org>
+Copyright 2018, Andrew C. Young <<andrew@vaelen.org>>
 
-License: MIT
+License: [MIT]
 
-Thanks to [Infostellar](http://infostellar.net) for supporting my development of this project.
+Thanks to [Infostellar] for supporting my development of this project.
+
+[Andrew C. Young]: http;//vaelen.org
+[Infostellar]: http://infostellar.net
+[context package]: https://golang.org/pkg/context/
+[MIT]: ../blob/master/LICENSE

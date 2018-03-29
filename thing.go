@@ -4,40 +4,32 @@
 package iot
 
 import (
-	"crypto/tls"
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/eclipse/paho.mqtt.golang"
 )
-
-// ClientConstructor defines a function for creating an MQTT client instance
-type ClientConstructor func(*mqtt.ClientOptions) mqtt.Client
-
-// NewClient is the ClientConstructor used to create MQTT client instances
-// Override this value during testing to provide an MQTT client mock implementation
-var NewClient ClientConstructor = mqtt.NewClient
 
 type thing struct {
 	options       *ThingOptions
-	client        mqtt.Client
+	client        MQTTClient
 	publishTicker *time.Ticker
 }
 
 // PublishState publishes the current device state
-func (t *thing) PublishState(message []byte) error {
-	return t.publish(t.stateTopic(), message, t.options.StateQOS)
+func (t *thing) PublishState(ctx context.Context, message []byte) error {
+	return t.publish(ctx, t.stateTopic(), message, t.options.StateQOS)
 }
 
 // PublishEvent publishes an event. An optional hierarchy of event names can be provided.
-func (t *thing) PublishEvent(message []byte, event ...string) error {
-	return t.publish(t.eventsTopic(event...), message, t.options.EventQOS)
+func (t *thing) PublishEvent(ctx context.Context, message []byte, event ...string) error {
+	return t.publish(ctx, t.eventsTopic(event...), message, t.options.EventQOS)
 }
 
 // Connect to the given MQTT server(s)
-func (t *thing) Connect(servers ...string) error {
+func (t *thing) Connect(ctx context.Context, servers ...string) error {
 	if t.IsConnected() {
 		return nil
 	}
@@ -48,40 +40,19 @@ func (t *thing) Connect(servers ...string) error {
 		t.options.AuthTokenExpiration = DefaultAuthTokenExpiration
 	}
 
-	var store mqtt.Store
-	if t.options.QueueDirectory == "" {
-		store = mqtt.NewMemoryStore()
-	} else {
-		store = mqtt.NewFileStore(t.options.QueueDirectory)
+	t.client = NewClient(t, t.options)
+
+	if t.options.LogMQTT {
+		t.client.SetDebugLogger(t.options.DebugLogger)
+		t.client.SetInfoLogger(t.options.InfoLogger)
+		t.client.SetErrorLogger(t.options.ErrorLogger)
 	}
 
-	options := mqtt.NewClientOptions()
-
-	options.SetTLSConfig(&tls.Config{
-		Certificates:       []tls.Certificate{t.options.Credentials.Certificate},
-		InsecureSkipVerify: true,
-	})
-
-	options.SetCleanSession(false)
-	options.SetAutoReconnect(true)
-	options.SetProtocolVersion(4)
-	options.SetClientID(t.clientID())
-	options.SetUsername("unused")
-	options.SetStore(store)
-	options.SetOnConnectHandler(func(i mqtt.Client) {
-		t.infof("Connected")
-	})
-	options.SetConnectionLostHandler(func(client mqtt.Client, e error) {
-		t.errorf("Connection Lost. Error: %v", e)
-	})
+	t.client.SetClientID(t.clientID())
 
 	t.publishTicker = time.NewTicker(time.Second * 2)
 
-	for _, server := range servers {
-		options.AddBroker(server)
-	}
-
-	options.SetCredentialsProvider(func() (username string, password string) {
+	t.client.SetCredentialsProvider(func() (username string, password string) {
 		authToken, err := t.authToken()
 		if err != nil {
 			t.errorf("Error generating auth token: %v", err)
@@ -90,26 +61,14 @@ func (t *thing) Connect(servers ...string) error {
 		return "unused", authToken
 	})
 
-	t.client = NewClient(options)
-
-	if t.options.LogMQTT {
-		mqtt.CRITICAL = &thingMQTTLogger{t.options.ErrorLogger}
-		mqtt.ERROR = &thingMQTTLogger{t.options.ErrorLogger}
-		mqtt.WARN = &thingMQTTLogger{t.options.InfoLogger}
-		mqtt.DEBUG = &thingMQTTLogger{t.options.DebugLogger}
+	err := t.client.Connect(ctx, servers...)
+	if err != nil {
+		return err
 	}
 
-	connectToken := t.client.Connect()
-	for !connectToken.WaitTimeout(time.Second) {
-		t.debugf("PENDING CONNECT")
-	}
-	if connectToken.Error() != nil {
-		return connectToken.Error()
-	}
+	t.client.Subscribe(ctx, t.configTopic(), t.options.ConfigQOS, t.options.ConfigHandler)
 
-	t.client.Subscribe(t.configTopic(), t.options.ConfigQOS, t.configHandler)
-
-	return nil
+	return err
 }
 
 // IsConnected returns true of the client is currently connected to MQTT server(s)
@@ -118,12 +77,12 @@ func (t *thing) IsConnected() bool {
 }
 
 // Disconnect from the MQTT server(s)
-func (t *thing) Disconnect() {
+func (t *thing) Disconnect(ctx context.Context) {
 	if t.client != nil {
-		t.client.Unsubscribe(t.configTopic())
+		t.client.Unsubscribe(ctx, t.configTopic())
 		if t.client.IsConnected() {
 			t.infof("Disconnecting")
-			t.client.Disconnect(1000)
+			t.client.Disconnect(ctx)
 		}
 	}
 }
@@ -173,26 +132,15 @@ func (t *thing) eventsTopic(subTopic ...string) string {
 	return fmt.Sprintf("/devices/%s/events/%s", t.options.ID.DeviceID, strings.Join(subTopic, "/"))
 }
 
-func (t *thing) configHandler(i mqtt.Client, message mqtt.Message) {
-	t.debugf("RECEIVED - Topic: %s, Message Length: %d bytes", message.Topic(), len(message.Payload()))
-	if t.options.ConfigHandler != nil {
-		t.options.ConfigHandler(t, message.Payload())
-	}
-}
-
-func (t *thing) publish(topic string, message []byte, qos uint8) error {
+func (t *thing) publish(ctx context.Context, topic string, message []byte, qos uint8) error {
 	<-t.publishTicker.C // Don't publish more than once per second
-	token := t.client.Publish(topic, qos, true, message)
-	if !token.WaitTimeout(time.Second) {
-		t.debugf("SEND TIMEOUT - Topic: %s, Message Length: %d bytes", topic, len(message))
-		return ErrPublishFailed
-	} else if token.Error() != nil {
-		t.debugf("SEND FAILED - Topic: %s, Message Length: %d bytes, Error: %v", topic, len(message), token.Error())
-		return token.Error()
-	} else {
-		t.debugf("SENT - Topic: %s, Message Length: %d bytes", topic, len(message))
-		return nil
+	err := t.client.Publish(ctx, topic, qos, message)
+	if err != nil {
+		t.debugf("SEND FAILED - Topic: %s, Message Length: %d bytes, Error: %v", topic, len(message), err)
+		return err
 	}
+	t.debugf("SENT - Topic: %s, Message Length: %d bytes", topic, len(message))
+	return nil
 }
 
 func (t *thing) log(logger Logger, format string, v ...interface{}) {
@@ -212,20 +160,4 @@ func (t *thing) infof(format string, v ...interface{}) {
 
 func (t *thing) errorf(format string, v ...interface{}) {
 	t.log(t.options.ErrorLogger, format, v...)
-}
-
-type thingMQTTLogger struct {
-	logger Logger
-}
-
-func (l *thingMQTTLogger) Println(v ...interface{}) {
-	if l.logger != nil {
-		l.logger(v...)
-	}
-}
-
-func (l *thingMQTTLogger) Printf(format string, v ...interface{}) {
-	if l.logger != nil {
-		l.logger(fmt.Sprintf(format, v...))
-	}
 }

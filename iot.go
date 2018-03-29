@@ -5,6 +5,7 @@
 package iot
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"fmt"
@@ -25,6 +26,13 @@ var ErrPublishFailed = fmt.Errorf("could not publish message")
 
 // ErrConfigurationError is returned from Connect() if either the ID or Credentials have not been set.
 var ErrConfigurationError = fmt.Errorf("required configuration values are mising")
+
+// ClientConstructor defines a function for creating an MQTT client instance
+type ClientConstructor func(thing Thing, options *ThingOptions) MQTTClient
+
+// NewClient is the ClientConstructor used to create MQTT client instances
+// Override this value during testing to provide an MQTT client mock implementation
+var NewClient ClientConstructor = NewPahoClient
 
 // ConfigHandler handles configuration updates received from the server.
 type ConfigHandler func(thing Thing, config []byte)
@@ -117,19 +125,19 @@ type ThingOptions struct {
 // Thing represents an IoT device
 type Thing interface {
 	// PublishState publishes the current device state
-	PublishState(message []byte) error
+	PublishState(ctx context.Context, message []byte) error
 
 	// PublishEvent publishes an event. An optional hierarchy of event names can be provided.
-	PublishEvent(message []byte, event ...string) error
+	PublishEvent(ctx context.Context, message []byte, event ...string) error
 
 	// Connect to the given MQTT server(s)
-	Connect(servers ...string) error
+	Connect(ctx context.Context, servers ...string) error
 
 	// IsConnected returns true of the client is currently connected to MQTT server(s)
 	IsConnected() bool
 
 	// Disconnect from the MQTT server(s)
-	Disconnect()
+	Disconnect(ctx context.Context)
 }
 
 // DefaultOptions returns the default set of options.
@@ -147,4 +155,43 @@ func DefaultOptions(id *ID, credentials *Credentials) *ThingOptions {
 // New returns a new Thing using the given options.
 func New(options *ThingOptions) Thing {
 	return &thing{options: options}
+}
+
+// MQTTCredentialsProvider should return the current username and password for the MQTT client to use.
+type MQTTCredentialsProvider func() (username string, password string)
+
+// The MQTTClient interface represents an underlying MQTT client implementation in an abstract way.
+type MQTTClient interface {
+	// IsConnected should return true when the client is connected to the server
+	IsConnected() bool
+
+	// Connect should connect to the given MQTT server
+	Connect(ctx context.Context, servers ...string) error
+
+	// Disconnect should disconnect from the given MQTT server and clean up all client resources
+	Disconnect(ctx context.Context) error
+
+	// Publish should publish the given payload to the given topic with the given quality of service level
+	Publish(ctx context.Context, topic string, qos uint8, payload interface{}) error
+
+	// Subscribe should subscribe to the given topic with the given quality of service level and message handler
+	Subscribe(ctx context.Context, topic string, qos uint8, callback ConfigHandler) error
+
+	// Unsubscribe should unsubscribe from the given topic
+	Unsubscribe(ctx context.Context, topic string) error
+
+	// SetDebugLogger should set the logger to use for logging debug messages
+	SetDebugLogger(logger Logger)
+
+	// SetInfoLogger should set the logger to use for logging information or warning messages
+	SetInfoLogger(logger Logger)
+
+	// SetErrorLogger should set the logger to use for logging error or critical messages
+	SetErrorLogger(logger Logger)
+
+	// SetClientID should set the MQTT client id.
+	SetClientID(clientID string)
+
+	// SetCredentialsProvider should set the CredentialsProvider used by the MQTT client
+	SetCredentialsProvider(crendentialsProvider MQTTCredentialsProvider)
 }
