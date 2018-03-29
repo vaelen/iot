@@ -142,9 +142,13 @@ func TestThing(t *testing.T) {
 		t.Fatalf("Couldn't connect. Error: %v", err)
 	}
 
-	doConnectionTest(t, thing, mockClient, options, serverAddress)
+	doConnectionTest(t, thing, mockClient, serverAddress)
+
+	doAlreadyConnectedTest(t, thing, mockClient, serverAddress)
 
 	doConfigTest(t, mockClient, configReceived)
+
+	checkClientValues(t, mockClient, options)
 
 	doEventTest(t, thing, mockClient)
 
@@ -154,9 +158,7 @@ func TestThing(t *testing.T) {
 	}
 }
 
-func doConnectionTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTClient, options *iot.ThingOptions, serverAddress string) {
-	ctx := context.Background()
-
+func doConnectionTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTClient, serverAddress string) {
 	if !mockClient.Connected {
 		t.Fatalf("Client not connected")
 	}
@@ -168,6 +170,10 @@ func doConnectionTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTCli
 	if !thing.IsConnected() {
 		t.Fatal("Thing thinks it is not connected when it really is")
 	}
+}
+
+func doAlreadyConnectedTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTClient, serverAddress string) {
+	ctx := context.Background()
 
 	err := thing.Connect(ctx, "already connected")
 	if err != nil {
@@ -181,7 +187,9 @@ func doConnectionTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTCli
 	if mockClient.CredentialsProvider == nil {
 		t.Fatal("Credentials provider not set")
 	}
+}
 
+func checkClientValues(t *testing.T, mockClient *iot.MockMQTTClient, options *iot.ThingOptions) {
 	options.AuthTokenExpiration = 0
 	username, password := mockClient.CredentialsProvider()
 	if username == "" || password == "" {
