@@ -1,16 +1,12 @@
 // Copyright 2018, Andrew C. Young
 // License: MIT
 
-package iot_test
-
-import (
-	"github.com/vaelen/iot"
-)
+package iot
 
 func ExampleMockMQTTClient() {
-	var mockClient *iot.MockMQTTClient
-	iot.NewClient = func(t iot.Thing, o *iot.ThingOptions) iot.MQTTClient {
-		mockClient = iot.NewMockClient(t, o)
+	var mockClient *MockMQTTClient
+	NewClient = func(t Thing, o *ThingOptions) MQTTClient {
+		mockClient = NewMockClient(t, o)
 		return mockClient
 	}
 
