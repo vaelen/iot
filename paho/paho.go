@@ -15,7 +15,7 @@ import (
 	mqtt "github.com/vaelen/paho.mqtt.golang"
 )
 
-const WaitTimeoutDuration = time.Millisecond * 100
+const waitTimeoutDuration = time.Millisecond * 100
 
 // MQTTClient is an implementation of MQTTClient that uses Eclipse Paho.
 // To use the client, you must include this package.
@@ -171,7 +171,7 @@ func waitForToken(ctx context.Context, token mqtt.Token) error {
 	go func() {
 		defer func() { result <- token.Error() }()
 		for {
-			if (token.WaitTimeout(WaitTimeoutDuration)) || cancelled {
+			if (token.WaitTimeout(waitTimeoutDuration)) || cancelled {
 				return
 			}
 		}
