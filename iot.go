@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"github.com/dgrijalva/jwt-go"
 )
 
@@ -125,6 +126,10 @@ type ThingOptions struct {
 	// The minimum value is 10 minutes and the maximum value is 24 hours.
 	// The default value is 1 hour.
 	AuthTokenExpiration time.Duration
+	// Clock represents the system clock.
+	// This value can be overriden for testing purposes.
+	// If not provided, this will default to the regular system clock.
+	Clock clock.Clock
 }
 
 // Thing represents an IoT device

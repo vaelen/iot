@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"github.com/dgrijalva/jwt-go"
 )
 
 type thing struct {
 	options       *ThingOptions
 	client        MQTTClient
-	publishTicker *time.Ticker
+	publishTicker *clock.Ticker
 }
 
 // PublishState publishes the current device state
@@ -39,6 +40,9 @@ func (t *thing) Connect(ctx context.Context, servers ...string) error {
 	if t.options.AuthTokenExpiration == 0 {
 		t.options.AuthTokenExpiration = DefaultAuthTokenExpiration
 	}
+	if t.options.Clock == nil {
+		t.options.Clock = clock.New()
+	}
 
 	if NewClient == nil {
 		panic("No MQTT client specified. Please import the iot/paho package.")
@@ -53,7 +57,7 @@ func (t *thing) Connect(ctx context.Context, servers ...string) error {
 
 	t.client.SetClientID(t.clientID())
 
-	t.publishTicker = time.NewTicker(time.Second * 2)
+	t.publishTicker = t.options.Clock.Ticker(time.Second * 2)
 
 	t.client.SetCredentialsProvider(func() (username string, password string) {
 		authToken, err := t.authToken()
