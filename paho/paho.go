@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"time"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/vaelen/iot"
-	mqtt "github.com/vaelen/paho.mqtt.golang"
 )
 
 const waitTimeoutDuration = time.Millisecond * 100
