@@ -7,6 +7,7 @@ import (
 	"context"
 	"log"
 	"testing"
+	"time"
 
 	"github.com/vaelen/iot"
 )
@@ -38,7 +39,7 @@ func TestPahoClient(t *testing.T) {
 
 	err := thing.Connect(ctx, "tcp://iot.eclipse.org:1883")
 	if err != nil {
-		panic("Couldn't connect to server")
+		t.Fatalf("Couldn't connect to server")
 	}
 	defer thing.Disconnect(ctx)
 
@@ -50,6 +51,14 @@ func TestPahoClient(t *testing.T) {
 	thing.PublishEvent(ctx, []byte("Sub folder telemetry event"), "a")
 	// This publishes to /events/a/b
 	thing.PublishEvent(ctx, []byte("Sub folder telemetry event"), "a", "b")
+
+	ctx2, cancel := context.WithTimeout(ctx, time.Nanosecond)
+	defer cancel()
+	err = mqttClient.Publish(ctx2, ConfigTopic, 2, []byte("foo"))
+	if err != iot.ErrCancelled {
+		t.Fatalf("Timeout didn't occur: %v", err)
+	}
+
 }
 
 func getOptions(t *testing.T) *iot.ThingOptions {

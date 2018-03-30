@@ -29,6 +29,9 @@ var ErrPublishFailed = fmt.Errorf("could not publish message")
 // ErrConfigurationError is returned from Connect() if either the ID or Credentials have not been set.
 var ErrConfigurationError = fmt.Errorf("required configuration values are mising")
 
+// ErrCancelled is returned when a context is canceled or times out.
+var ErrCancelled = fmt.Errorf("operation was cancelled or timed out")
+
 // ClientConstructor defines a function for creating an MQTT client instance
 type ClientConstructor func(thing Thing, options *ThingOptions) MQTTClient
 

@@ -9,10 +9,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"time"
 
 	"github.com/vaelen/iot"
 	mqtt "github.com/vaelen/paho.mqtt.golang"
 )
+
+const WaitTimeoutDuration = time.Millisecond * 100
 
 // MQTTClient is an implementation of MQTTClient that uses Eclipse Paho.
 // To use the client, you must include this package.
@@ -89,9 +92,7 @@ func (c *MQTTClient) Connect(ctx context.Context, servers ...string) error {
 	c.client = mqtt.NewClient(clientOptions)
 
 	token := c.client.Connect()
-	token.Wait()
-	return token.Error()
-
+	return waitForToken(ctx, token)
 }
 
 // Disconnect will disconnect from the given MQTT server and clean up all client resources
@@ -109,8 +110,7 @@ func (c *MQTTClient) Publish(ctx context.Context, topic string, qos uint8, paylo
 		return iot.ErrNotConnected
 	}
 	token := c.client.Publish(topic, qos, true, payload)
-	token.Wait()
-	return token.Error()
+	return waitForToken(ctx, token)
 }
 
 // Subscribe will subscribe to the given topic with the given quality of service level and message handler
@@ -127,8 +127,7 @@ func (c *MQTTClient) Subscribe(ctx context.Context, topic string, qos uint8, cal
 		}
 	}
 	token := c.client.Subscribe(topic, qos, handler)
-	token.Wait()
-	return token.Error()
+	return waitForToken(ctx, token)
 }
 
 // Unsubscribe will unsubscribe from the given topic
@@ -137,8 +136,7 @@ func (c *MQTTClient) Unsubscribe(ctx context.Context, topic string) error {
 		return iot.ErrNotConnected
 	}
 	token := c.client.Unsubscribe(topic)
-	token.Wait()
-	return token.Error()
+	return waitForToken(ctx, token)
 }
 
 // SetDebugLogger sets the logger to use for logging debug messages
@@ -165,6 +163,26 @@ func (c *MQTTClient) SetClientID(clientID string) {
 // SetCredentialsProvider sets the CredentialsProvider used by the MQTT client
 func (c *MQTTClient) SetCredentialsProvider(credentialsProvider iot.MQTTCredentialsProvider) {
 	c.credentialsProvider = credentialsProvider
+}
+
+func waitForToken(ctx context.Context, token mqtt.Token) error {
+	result := make(chan error)
+	cancelled := false
+	go func() {
+		defer func() { result <- token.Error() }()
+		for {
+			if (token.WaitTimeout(WaitTimeoutDuration)) || cancelled {
+				return
+			}
+		}
+	}()
+	select {
+	case err := <-result:
+		return err
+	case <-ctx.Done():
+		cancelled = true
+	}
+	return iot.ErrCancelled
 }
 
 type pahoLogger struct {
