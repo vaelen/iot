@@ -13,8 +13,11 @@ import (
 	"github.com/vaelen/iot"
 )
 
-const CertificatePath = "test_keys/rsa_cert.pem"
-const PrivateKeyPath = "test_keys/rsa_private.pem"
+const RSACertificatePath = "test_keys/rsa_cert.pem"
+const RSAPrivateKeyPath = "test_keys/rsa_private.pem"
+
+const ECCertificatePath = "test_keys/ec_cert.pem"
+const ECPrivateKeyPath = "test_keys/ec_private.pem"
 
 var TestID = &iot.ID{
 	ProjectID: "test-project",
@@ -28,8 +31,23 @@ var ConfigTopic = "/devices/test-device/config"
 var StateTopic = "/devices/test-device/state"
 var EventsTopic = "/devices/test-device/events"
 
-func TestLoadCredentials(t *testing.T) {
-	credentials, err := iot.LoadCredentials(CertificatePath, PrivateKeyPath)
+var mockClient *iot.MockMQTTClient
+
+func TestLoadRSACredentials(t *testing.T) {
+	credentials, err := iot.LoadRSACredentials(RSACertificatePath, RSAPrivateKeyPath)
+	if err != nil {
+		t.Fatalf("Couldn't load credentials: %v", err)
+	}
+	if credentials == nil {
+		t.Fatal("Credentials not loaded.")
+	}
+	if credentials.PrivateKey == nil {
+		t.Fatal("Private key not loaded.")
+	}
+}
+
+func TestLoadECCredentials(t *testing.T) {
+	credentials, err := iot.LoadECCredentials(ECCertificatePath, ECPrivateKeyPath)
 	if err != nil {
 		t.Fatalf("Couldn't load credentials: %v", err)
 	}
@@ -42,7 +60,7 @@ func TestLoadCredentials(t *testing.T) {
 }
 
 func TestDefaultOptions(t *testing.T) {
-	credentials, err := iot.LoadCredentials(CertificatePath, PrivateKeyPath)
+	credentials, err := iot.LoadRSACredentials(RSACertificatePath, RSAPrivateKeyPath)
 	if err != nil {
 		t.Fatalf("Couldn't load credentials: %v", err)
 	}
@@ -91,19 +109,68 @@ func TestThingWithBadOptions(t *testing.T) {
 	}
 }
 
-func TestThing(t *testing.T) {
-	ctx := context.Background()
-	var mockClient *iot.MockMQTTClient
+func TestRSAThingFull(t *testing.T) {
+	initMockClient()
+	credentials := getCredentials(t, iot.CredentialTypeRSA)
+	options, configReceived := getOptions(t, credentials)
+	thing := getThing(t, options)
+	serverAddress := "ssl://mqtt.example.com:443"
+	doConnectionTest(t, thing, serverAddress)
+	doAlreadyConnectedTest(t, thing, serverAddress)
+	checkClientValues(t, options)
+	doConfigTest(t, configReceived)
+	doEventTest(t, thing)
+	doDisconnectTest(t, thing)
+}
+
+func TestECThingConnectOnly(t *testing.T) {
+	initMockClient()
+	credentials := getCredentials(t, iot.CredentialTypeEC)
+	options, _ := getOptions(t, credentials)
+	thing := getThing(t, options)
+	serverAddress := "ssl://mqtt.example.com:443"
+	doConnectionTest(t, thing, serverAddress)
+	checkClientValues(t, options)
+	doDisconnectTest(t, thing)
+}
+
+func initMockClient() {
 	iot.NewClient = func(t iot.Thing, o *iot.ThingOptions) iot.MQTTClient {
 		mockClient = iot.NewMockClient(t, o)
 		return mockClient
 	}
+}
 
-	credentials, err := iot.LoadCredentials(CertificatePath, PrivateKeyPath)
+func getThing(t *testing.T, options *iot.ThingOptions) iot.Thing {
+	thing := iot.New(options)
+	if thing == nil {
+		t.Fatal("Thing wasn't returned from New()")
+	}
+
+	if thing.IsConnected() {
+		t.Fatal("Thing thinks it is connected when it really is not")
+	}
+	return thing
+}
+
+func getCredentials(t *testing.T, credentialType iot.CredentialType) *iot.Credentials {
+	var credentials *iot.Credentials
+	var err error
+	switch credentialType {
+	case iot.CredentialTypeEC:
+		credentials, err = iot.LoadECCredentials(ECCertificatePath, ECPrivateKeyPath)
+	case iot.CredentialTypeRSA:
+		fallthrough
+	default:
+		credentials, err = iot.LoadRSACredentials(RSACertificatePath, RSAPrivateKeyPath)
+	}
 	if err != nil {
 		t.Fatalf("Couldn't load credentials: %v", err)
 	}
+	return credentials
+}
 
+func getOptions(t *testing.T, credentials *iot.Credentials) (*iot.ThingOptions, *bytes.Buffer) {
 	options := iot.DefaultOptions(TestID, credentials)
 	if options == nil {
 		t.Fatal("Options structure wasn't returned")
@@ -121,44 +188,23 @@ func TestThing(t *testing.T) {
 	options.ErrorLogger = func(a ...interface{}) { fmt.Fprint(errorWriter, a...) }
 	options.LogMQTT = true
 	options.ConfigHandler = func(thing iot.Thing, config []byte) {
+		ctx := context.Background()
 		configReceived.Truncate(0)
 		configReceived.Write(config)
 		state := []byte("ok")
 		thing.PublishState(ctx, state)
 	}
 
-	thing := iot.New(options)
-	if thing == nil {
-		t.Fatal("Thing wasn't returned from New()")
-	}
+	return options, configReceived
+}
 
-	if thing.IsConnected() {
-		t.Fatal("Thing thinks it is connected when it really is not")
-	}
-
-	serverAddress := "ssl://mqtt.example.com:443"
-	err = thing.Connect(ctx, serverAddress)
+func doConnectionTest(t *testing.T, thing iot.Thing, serverAddress string) {
+	ctx := context.Background()
+	err := thing.Connect(ctx, serverAddress)
 	if err != nil {
 		t.Fatalf("Couldn't connect. Error: %v", err)
 	}
 
-	doConnectionTest(t, thing, mockClient, serverAddress)
-
-	doAlreadyConnectedTest(t, thing, mockClient, serverAddress)
-
-	doConfigTest(t, mockClient, configReceived)
-
-	checkClientValues(t, mockClient, options)
-
-	doEventTest(t, thing, mockClient)
-
-	thing.Disconnect(ctx)
-	if mockClient.Connected {
-		t.Fatal("Didn't disconnect")
-	}
-}
-
-func doConnectionTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTClient, serverAddress string) {
 	if !mockClient.Connected {
 		t.Fatalf("Client not connected")
 	}
@@ -172,7 +218,7 @@ func doConnectionTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTCli
 	}
 }
 
-func doAlreadyConnectedTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTClient, serverAddress string) {
+func doAlreadyConnectedTest(t *testing.T, thing iot.Thing, serverAddress string) {
 	ctx := context.Background()
 
 	err := thing.Connect(ctx, "already connected")
@@ -189,7 +235,7 @@ func doAlreadyConnectedTest(t *testing.T, thing iot.Thing, mockClient *iot.MockM
 	}
 }
 
-func checkClientValues(t *testing.T, mockClient *iot.MockMQTTClient, options *iot.ThingOptions) {
+func checkClientValues(t *testing.T, options *iot.ThingOptions) {
 	options.AuthTokenExpiration = 0
 	username, password := mockClient.CredentialsProvider()
 	if username == "" || password == "" {
@@ -217,7 +263,7 @@ func checkClientValues(t *testing.T, mockClient *iot.MockMQTTClient, options *io
 	}
 }
 
-func doConfigTest(t *testing.T, mockClient *iot.MockMQTTClient, configReceived *bytes.Buffer) {
+func doConfigTest(t *testing.T, configReceived *bytes.Buffer) {
 	mockClient.Receive(ConfigTopic, []byte("test config"))
 
 	if configReceived.String() != "test config" {
@@ -234,7 +280,7 @@ func doConfigTest(t *testing.T, mockClient *iot.MockMQTTClient, configReceived *
 	}
 }
 
-func doEventTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTClient) {
+func doEventTest(t *testing.T, thing iot.Thing) {
 	ctx := context.Background()
 	topLevelMessage := "Top"
 	events := make(map[string]string)
@@ -280,5 +326,12 @@ func doEventTest(t *testing.T, thing iot.Thing, mockClient *iot.MockMQTTClient) 
 		if string(l[0].([]byte)) != v {
 			t.Fatalf("Wrong message published.  Topic: %v, Message: %v", topic, string(l[0].([]byte)))
 		}
+	}
+}
+
+func doDisconnectTest(t *testing.T, thing iot.Thing) {
+	thing.Disconnect(context.Background())
+	if mockClient.Connected {
+		t.Fatal("Didn't disconnect")
 	}
 }

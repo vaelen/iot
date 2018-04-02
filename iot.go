@@ -8,7 +8,6 @@ package iot
 
 import (
 	"context"
-	"crypto/rsa"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
@@ -54,14 +53,25 @@ type ID struct {
 	DeviceID  string
 }
 
+// CredentialType defines the key type of the credential key pair.
+type CredentialType uint8
+
+const (
+	// CredentialTypeRSA specfies that the credentials use RSA keys
+	CredentialTypeRSA CredentialType = 0
+	// CredentialTypeEC specifies that the credentials use Eliptic Curve keys
+	CredentialTypeEC CredentialType = 1
+)
+
 // Credentials wraps the public and private key for a device
 type Credentials struct {
+	Type        CredentialType
 	Certificate tls.Certificate
-	PrivateKey  *rsa.PrivateKey
+	PrivateKey  interface{}
 }
 
-// LoadCredentials creates a Credentials struct from the given private key and certificate
-func LoadCredentials(certificatePath string, privateKeyPath string) (*Credentials, error) {
+// LoadRSACredentials creates a Credentials struct from the given RSA private key and certificate
+func LoadRSACredentials(certificatePath string, privateKeyPath string) (*Credentials, error) {
 	signBytes, err := ioutil.ReadFile(privateKeyPath)
 	if err != nil {
 		return nil, err
@@ -78,6 +88,31 @@ func LoadCredentials(certificatePath string, privateKeyPath string) (*Credential
 	}
 
 	return &Credentials{
+		Type:        CredentialTypeRSA,
+		Certificate: certificate,
+		PrivateKey:  privateKey,
+	}, nil
+}
+
+// LoadECCredentials creates a Credentials struct from the given EC private key and certificate
+func LoadECCredentials(certificatePath string, privateKeyPath string) (*Credentials, error) {
+	signBytes, err := ioutil.ReadFile(privateKeyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey, err := jwt.ParseECPrivateKeyFromPEM(signBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	certificate, err := tls.LoadX509KeyPair(certificatePath, privateKeyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Credentials{
+		Type:        CredentialTypeEC,
 		Certificate: certificate,
 		PrivateKey:  privateKey,
 	}, nil

@@ -64,7 +64,7 @@ func TestPahoClient(t *testing.T) {
 func getOptions(t *testing.T) *iot.ThingOptions {
 	ctx := context.Background()
 
-	credentials, err := iot.LoadCredentials("../test_keys/rsa_cert.pem", "../test_keys/rsa_private.pem")
+	credentials, err := iot.LoadRSACredentials("../test_keys/rsa_cert.pem", "../test_keys/rsa_private.pem")
 	if err != nil {
 		t.Fatal("Couldn't load credentials")
 	}

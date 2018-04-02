@@ -43,7 +43,7 @@ func main() {
 
 	log.Printf("Config: %+v", config)
 
-	credentials, err := iot.LoadCredentials(config.Certificate, config.PrivateKey)
+	credentials, err := iot.LoadRSACredentials(config.Certificate, config.PrivateKey)
 	handleError("Couldn't load credentials", err)
 
 	queueDirectory, err := ioutil.TempDir("", "iot-queue-")

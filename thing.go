@@ -101,7 +101,17 @@ func (t *thing) clientID() string {
 }
 
 func (t *thing) authToken() (string, error) {
-	wt := jwt.New(jwt.GetSigningMethod("RS256"))
+	var signingMethod jwt.SigningMethod
+	switch t.options.Credentials.Type {
+	case CredentialTypeEC:
+		signingMethod = jwt.GetSigningMethod("ES256")
+	case CredentialTypeRSA:
+		fallthrough
+	default:
+		signingMethod = jwt.GetSigningMethod("RS256")
+	}
+
+	wt := jwt.New(signingMethod)
 
 	expirationInterval := t.options.AuthTokenExpiration
 	if expirationInterval == 0 {

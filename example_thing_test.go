@@ -24,7 +24,7 @@ func ExampleThing() {
 		ProjectID: "my-project",
 	}
 
-	credentials, err := LoadCredentials("rsa_cert.pem", "rsa_private.pem")
+	credentials, err := LoadRSACredentials("rsa_cert.pem", "rsa_private.pem")
 	if err != nil {
 		panic("Couldn't load credentials")
 	}
