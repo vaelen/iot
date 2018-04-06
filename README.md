@@ -36,7 +36,7 @@ func main() {
 		ProjectID: "my-project",
 	}
 
-	credentials, err := iot.LoadCredentials("rsa_cert.pem", "rsa_private.pem")
+	credentials, err := iot.LoadRSACredentials("rsa_cert.pem", "rsa_private.pem")
 	if err != nil {
 		panic("Couldn't load credentials")
 	}
