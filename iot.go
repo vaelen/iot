@@ -162,7 +162,7 @@ type ThingOptions struct {
 	// The default value is 1 hour.
 	AuthTokenExpiration time.Duration
 	// Clock represents the system clock.
-	// This value can be overriden for testing purposes.
+	// This value can be overridden for testing purposes.
 	// If not provided, this will default to the regular system clock.
 	Clock clock.Clock
 }
