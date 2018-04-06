@@ -205,6 +205,10 @@ func New(options *ThingOptions) Thing {
 // MQTTCredentialsProvider should return the current username and password for the MQTT client to use.
 type MQTTCredentialsProvider func() (username string, password string)
 
+// MQTTOnConnectHandler will be called after the client connects.
+// It should be used to resubscribe to topics and perform other connection related tasks.
+type MQTTOnConnectHandler func(client MQTTClient)
+
 // The MQTTClient interface represents an underlying MQTT client implementation in an abstract way.
 type MQTTClient interface {
 	// IsConnected should return true when the client is connected to the server
@@ -239,4 +243,7 @@ type MQTTClient interface {
 
 	// SetCredentialsProvider should set the CredentialsProvider used by the MQTT client
 	SetCredentialsProvider(crendentialsProvider MQTTCredentialsProvider)
+
+	// SetOnConnectHandler provides a callback that should be called after the client connects to the server
+	SetOnConnectHandler(handler MQTTOnConnectHandler)
 }

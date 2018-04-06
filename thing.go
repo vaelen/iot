@@ -68,12 +68,14 @@ func (t *thing) Connect(ctx context.Context, servers ...string) error {
 		return "unused", authToken
 	})
 
+	t.client.SetOnConnectHandler(func(client MQTTClient) {
+		client.Subscribe(ctx, t.configTopic(), t.options.ConfigQOS, t.options.ConfigHandler)
+	})
+
 	err := t.client.Connect(ctx, servers...)
 	if err != nil {
 		return err
 	}
-
-	t.client.Subscribe(ctx, t.configTopic(), t.options.ConfigQOS, t.options.ConfigHandler)
 
 	return err
 }

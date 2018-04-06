@@ -25,6 +25,7 @@ type MQTTClient struct {
 	clientID            string
 	client              mqtt.Client
 	credentialsProvider iot.MQTTCredentialsProvider
+	onConnectHandler    iot.MQTTOnConnectHandler
 }
 
 // NewClient creates an MQTTClient instance using Eclipse Paho.
@@ -82,6 +83,11 @@ func (c *MQTTClient) Connect(ctx context.Context, servers ...string) error {
 	clientOptions.SetConnectionLostHandler(func(client mqtt.Client, e error) {
 		if c.options.ErrorLogger != nil {
 			c.options.ErrorLogger(fmt.Sprintf("Connection Lost. Error: %v", e))
+		}
+	})
+	clientOptions.SetOnConnectHandler(func(client mqtt.Client) {
+		if c.onConnectHandler != nil {
+			c.onConnectHandler(c)
 		}
 	})
 
@@ -163,6 +169,11 @@ func (c *MQTTClient) SetClientID(clientID string) {
 // SetCredentialsProvider sets the CredentialsProvider used by the MQTT client
 func (c *MQTTClient) SetCredentialsProvider(credentialsProvider iot.MQTTCredentialsProvider) {
 	c.credentialsProvider = credentialsProvider
+}
+
+// SetOnConnectHandler sets the method that is called after the client connects to the server
+func (c *MQTTClient) SetOnConnectHandler(handler iot.MQTTOnConnectHandler) {
+	c.onConnectHandler = handler
 }
 
 func waitForToken(ctx context.Context, token mqtt.Token) error {

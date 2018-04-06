@@ -22,6 +22,7 @@ type MockMQTTClient struct {
 	ErrorLogger         Logger
 	ClientID            string
 	CredentialsProvider MQTTCredentialsProvider
+	OnConnectHandler    MQTTOnConnectHandler
 }
 
 // NewMockClient returns an instance of MockMQTTClient
@@ -52,6 +53,9 @@ func (c *MockMQTTClient) IsConnected() bool {
 func (c *MockMQTTClient) Connect(ctx context.Context, servers ...string) error {
 	c.Connected = true
 	c.ConnectedTo = servers
+	if c.OnConnectHandler != nil {
+		c.OnConnectHandler(c)
+	}
 	return nil
 }
 
@@ -107,4 +111,9 @@ func (c *MockMQTTClient) SetClientID(clientID string) {
 // SetCredentialsProvider sets CredentialsProvider
 func (c *MockMQTTClient) SetCredentialsProvider(crendentialsProvider MQTTCredentialsProvider) {
 	c.CredentialsProvider = crendentialsProvider
+}
+
+// SetOnConnectHandler sets OnConnectHandler
+func (c *MockMQTTClient) SetOnConnectHandler(handler MQTTOnConnectHandler) {
+	c.OnConnectHandler = handler
 }

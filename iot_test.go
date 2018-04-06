@@ -261,6 +261,10 @@ func checkClientValues(t *testing.T, options *iot.ThingOptions) {
 	if len(mockClient.Subscriptions) != 1 {
 		t.Fatalf("Wrong number of subscriptions: %v", len(mockClient.Subscriptions))
 	}
+
+	if mockClient.OnConnectHandler == nil {
+		t.Fatalf("OnConnectHandler not set")
+	}
 }
 
 func doConfigTest(t *testing.T, configReceived *bytes.Buffer) {
