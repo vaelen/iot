@@ -81,8 +81,10 @@ func (c *MQTTClient) Connect(ctx context.Context, servers ...string) error {
 		}
 	})
 	clientOptions.SetConnectionLostHandler(func(client mqtt.Client, e error) {
-		if c.options.ErrorLogger != nil {
-			c.options.ErrorLogger(fmt.Sprintf("Connection Lost. Error: %v", e))
+		if e != io.EOF {
+			if c.options.ErrorLogger != nil {
+				c.options.ErrorLogger(fmt.Sprintf("Connection Lost. Error: %v", e))
+			}
 		}
 	})
 	clientOptions.SetOnConnectHandler(func(client mqtt.Client) {
